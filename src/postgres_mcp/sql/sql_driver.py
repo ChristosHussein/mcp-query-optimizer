@@ -1,6 +1,7 @@
 """SQL driver adapter for PostgreSQL connections."""
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -227,10 +228,12 @@ class SqlDriver:
         transaction_started = False
         try:
             async with connection.cursor(row_factory=dict_row) as cursor:
-                # Start read-only transaction
+                # Start read-only transaction with configurable timeout
                 if force_readonly:
                     await cursor.execute("BEGIN TRANSACTION READ ONLY")
                     transaction_started = True
+                    timeout_s = int(os.environ.get("PG_MCP_TIMEOUT_SECONDS", "180"))
+                    await cursor.execute(f"SET LOCAL statement_timeout = {max(1, timeout_s) * 1000}")
 
                 if params:
                     await cursor.execute(query, params)

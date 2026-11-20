@@ -36,9 +36,9 @@ Rules:
    - Scan hints: SeqScan(alias), IndexScan(alias), IndexOnlyScan(alias), BitmapScan(alias), NoSeqScan(alias), NoIndexScan(alias)
    - Join hints: HashJoin(a b ...), MergeJoin(a b ...), NestLoop(a b ...), NoNestLoop(a b ...), NoHashJoin(a b ...)
    - Join order: Leading((a b) c) or Leading(a b c)
-4. You may call get_table_stats or explain_with_hints(analyze=False) to inspect statistics or test plans cheaply before committing.
+4. You may call get_table_stats or explain_with_hints(analyze=False) at most 2 times to inspect statistics or check estimated plans/hint validity cheaply. Do NOT call explain_with_hints with analyze=True — the evaluator will execute and time your final JSON proposal for this round.
 5. Do NOT repeat a hint set that already failed or regressed in a previous round.
-6. End your turn with a single valid JSON object inside ```json ... ``` with exact keys:
+6. Keep reasoning concise and end your turn with a single valid JSON object inside ```json ... ``` with exact keys:
    {
      "action_type": "hints",
      "hints": "/*+ ... */",
@@ -69,12 +69,12 @@ Rules:
 class AdvisorConfig:
     benchmark: str  # "job" | "tpch"
     method_id: str  # "mcp_single_shot" | "mcp_iter_cheap" | "mcp_iter_hybrid" | "mcp_iter_frontier"
-    worker_model: str = "gemini-3.8-flash"
-    advisor_model: str = "gemini-4-argon"
+    worker_model: str = "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"
+    advisor_model: str = "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
     max_rounds: int = 5
     escalate_after_round: int = 2
     escalation_min_gain_pct: float = 25.0
-    max_tool_calls_per_round: int = 4
+    max_tool_calls_per_round: int = 2
     early_stop_latency_ms: float = 50.0
     no_improve_patience: int = 2
     statement_timeout_s: int = 180
@@ -138,7 +138,22 @@ def _call_with_retry(fn: Any, max_retries: int = 4) -> Any:
             return fn()
         except Exception as exc:
             msg = str(exc).lower()
-            retryable = any(k in msg for k in ("429", "rate limit", "resource_exhausted", "503", "502", "temporarily unavailable"))
+            retryable = any(
+                k in msg
+                for k in (
+                    "429",
+                    "529",
+                    "overloaded",
+                    "rate limit",
+                    "resource_exhausted",
+                    "503",
+                    "502",
+                    "temporarily unavailable",
+                    "timed out",
+                    "timeout",
+                    "connection",
+                )
+            )
             if not retryable or attempt == max_retries:
                 raise
             time.sleep(delay)
@@ -175,7 +190,7 @@ class QueryAdvisorRunner:
             api_key = os.environ.get("NVIDIA_API_KEY")
             if not api_key:
                 raise RuntimeError("Missing NVIDIA_API_KEY environment variable for 'nvidia:*' model.")
-            self._nvidia_client = OpenAI(base_url=NVIDIA_NIM_BASE_URL, api_key=api_key)
+            self._nvidia_client = OpenAI(base_url=NVIDIA_NIM_BASE_URL, api_key=api_key, timeout=120.0, max_retries=0)
         return self._nvidia_client
 
     def _select_model(self, round_idx: int, baseline_ms: float, best_ms: float) -> str:
@@ -221,16 +236,17 @@ class QueryAdvisorRunner:
                 {"role": "user", "content": prompt},
             ]
             while True:
+                tools_allowed = tool_calls_used < self.config.max_tool_calls_per_round
                 t0 = time.perf_counter()
-                resp = _call_with_retry(
-                    lambda: client.chat.completions.create(
-                        model=nim_model,
-                        messages=messages,
-                        tools=openai_tools,
-                        tool_choice="auto",
-                        temperature=0.2,
-                    )
-                )
+                req_kwargs: dict[str, Any] = {
+                    "model": nim_model,
+                    "messages": messages,
+                    "temperature": 0.2,
+                }
+                if tools_allowed and openai_tools:
+                    req_kwargs["tools"] = openai_tools
+                    req_kwargs["tool_choice"] = "auto"
+                resp = _call_with_retry(lambda: client.chat.completions.create(**req_kwargs))
                 wall_ms += (time.perf_counter() - t0) * 1000.0
                 calls += 1
                 if resp.usage:
@@ -241,25 +257,37 @@ class QueryAdvisorRunner:
                         thought_tok += int(details.reasoning_tokens)
 
                 msg = resp.choices[0].message
-                if not msg.tool_calls:
+                if not msg.tool_calls or not tools_allowed:
                     text = msg.content or getattr(msg, "reasoning_content", None)
                     return text, calls, in_tok, out_tok, thought_tok, wall_ms
 
-                messages.append(msg.model_dump(exclude_none=True))
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [tc.model_dump(exclude_none=True) for tc in msg.tool_calls],
+                })
                 for tc in msg.tool_calls:
                     tool_calls_used += 1
                     if tool_calls_used > self.config.max_tool_calls_per_round:
-                        tool_out = "Tool call budget for this round reached. Return your final JSON proposal now."
+                        tool_out = "Tool call budget reached. Output your final ```json ... ``` proposal now."
                     else:
                         try:
                             args = json.loads(tc.function.arguments or "{}")
+                            # Prevent expensive analyze=True inside exploration tool calls
+                            if tc.function.name in ("explain_query", "explain_with_hints") and args.get("analyze"):
+                                args["analyze"] = False
                             tool_out = await self._call_mcp(session, tc.function.name, args)
                         except Exception as exc:
                             tool_out = f"Tool error: {exc}"
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
-                        "content": tool_out[:12000],
+                        "content": tool_out[:8000],
+                    })
+                if tool_calls_used >= self.config.max_tool_calls_per_round:
+                    messages.append({
+                        "role": "user",
+                        "content": "Tool budget for this round is exhausted. Output ONLY your final ```json ... ``` proposal now.",
                     })
 
         # Default: Gemini Interactions API
@@ -267,16 +295,17 @@ class QueryAdvisorRunner:
         user_input: Any = prompt
         prev_id: str | None = None
         while True:
+            tools_allowed = tool_calls_used < self.config.max_tool_calls_per_round
             t0 = time.perf_counter()
-            interaction = _call_with_retry(
-                lambda: client.interactions.create(
-                    model=model,
-                    input=user_input,
-                    tools=gemini_tools,
-                    system_instruction=system_prompt,
-                    previous_interaction_id=prev_id,
-                )
-            )
+            g_kwargs: dict[str, Any] = {
+                "model": model,
+                "input": user_input,
+                "system_instruction": system_prompt,
+                "previous_interaction_id": prev_id,
+            }
+            if tools_allowed and gemini_tools:
+                g_kwargs["tools"] = gemini_tools
+            interaction = _call_with_retry(lambda: client.interactions.create(**g_kwargs))
             wall_ms += (time.perf_counter() - t0) * 1000.0
             calls += 1
             i_t, o_t, th_t = _usage_counts(interaction)
@@ -289,20 +318,23 @@ class QueryAdvisorRunner:
                 if step.type == "function_call":
                     tool_calls_used += 1
                     if tool_calls_used > self.config.max_tool_calls_per_round:
-                        tool_out = "Tool call budget for this round reached. Return your final JSON proposal now."
+                        tool_out = "Tool budget reached. Output your final ```json ... ``` proposal now."
                     else:
                         try:
-                            tool_out = await self._call_mcp(session, step.name, dict(step.arguments or {}))
+                            args = dict(step.arguments or {})
+                            if step.name in ("explain_query", "explain_with_hints") and args.get("analyze"):
+                                args["analyze"] = False
+                            tool_out = await self._call_mcp(session, step.name, args)
                         except Exception as exc:
                             tool_out = f"Tool error: {exc}"
                     fn_results.append({
                         "type": "function_result",
                         "name": step.name,
                         "call_id": step.id,
-                        "result": [{"type": "text", "text": tool_out[:12000]}],
+                        "result": [{"type": "text", "text": tool_out[:8000]}],
                     })
 
-            if not fn_results:
+            if not fn_results or not tools_allowed:
                 return interaction.output_text, calls, in_tok, out_tok, thought_tok, wall_ms
 
             user_input = fn_results
@@ -323,8 +355,14 @@ class QueryAdvisorRunner:
         is_hints = self.config.benchmark == "job"
         system_prompt = HINTS_SYSTEM_PROMPT if is_hints else INDEX_SYSTEM_PROMPT
 
-        # Round 0: Measure default PostgreSQL EXPLAIN ANALYZE via MCP
+        # Round 0: Warm-up + measure default PostgreSQL EXPLAIN ANALYZE via MCP (avoids cold-cache bias)
+        for _ in range(max(0, self.config.eval_warmup_runs)):
+            warm_out = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": True})
+            if warm_out.startswith("Error:"):
+                break
         base_plan_text = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": True})
+        if base_plan_text.startswith("Error:"):
+            print(f"  [WARN] Baseline EXPLAIN ANALYZE error on {query_id}: {base_plan_text[:300]}")
         base_ms = _parse_execution_time_ms(base_plan_text)
         base_cost = _parse_root_cost(base_plan_text)
 
@@ -374,9 +412,40 @@ class QueryAdvisorRunner:
                 sql, base_plan_text, last_plan_text, base_ms, best_ms, best_action, history_lines, r, max_rounds
             )
 
-            final_text, r_calls, r_in, r_out, r_th, r_wall = await self._run_llm_round(
-                session, model, system_prompt, prompt, gemini_tools, openai_tools
-            )
+            try:
+                final_text, r_calls, r_in, r_out, r_th, r_wall = await self._run_llm_round(
+                    session, model, system_prompt, prompt, gemini_tools, openai_tools
+                )
+            except Exception as exc:
+                print(f"  [WARN] LLM API error on {query_id} round {r} ({model}): {exc}")
+                records.append({
+                    "run_id": run_id,
+                    "git_commit": git_commit,
+                    "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "benchmark": self.config.benchmark,
+                    "query_id": query_id,
+                    "method_id": self.config.method_id,
+                    "round_index": r,
+                    "model_advisor": self.config.advisor_model if self.config.method_id in ("mcp_iter_hybrid", "mcp_iter_frontier") else None,
+                    "model_worker": self.config.worker_model,
+                    "model_used_this_round": model,
+                    "proposed_action": None,
+                    "action_valid": False,
+                    "estimated_cost": None,
+                    "execution_latency_ms": None,
+                    "timed_out": False,
+                    "feedback": f"LLM API error: {exc}",
+                    "rationale": None,
+                    "llm_calls": cum_llm_calls,
+                    "prompt_tokens": cum_in_tok,
+                    "completion_tokens": cum_out_tok,
+                    "thought_tokens": cum_thought_tok,
+                    "llm_wall_time_ms": round(cum_llm_wall_ms, 2),
+                })
+                no_improve_streak += 1
+                if no_improve_streak >= self.config.no_improve_patience:
+                    break
+                continue
             cum_llm_calls += r_calls
             cum_in_tok += r_in
             cum_out_tok += r_out
@@ -491,11 +560,16 @@ class QueryAdvisorRunner:
                     "timed_out": False,
                     "feedback": "Missing 'hints' string in JSON proposal.",
                 }
-            raw = await self._call_mcp(
-                session,
-                "explain_with_hints",
-                {"sql": sql, "hints": hints, "analyze": True, "timeout_seconds": self.config.statement_timeout_s},
-            )
+            # Warm-up + timed measurement for fair warm-cache comparison against Round 0
+            raw = ""
+            for _ in range(max(0, self.config.eval_warmup_runs) + 1):
+                raw = await self._call_mcp(
+                    session,
+                    "explain_with_hints",
+                    {"sql": sql, "hints": hints, "analyze": True, "timeout_seconds": self.config.statement_timeout_s},
+                )
+                if raw.startswith("Error:"):
+                    break
             if raw.startswith("Error:"):
                 return {
                     "proposed_action": hints,
@@ -590,8 +664,24 @@ class QueryAdvisorRunner:
             "plan_text": p2.get("plan_text"),
         }
 
-    async def open_mcp_and_run(self, queries: list[tuple[str, str]], run_id: str, git_commit: str, out_jsonl: Path) -> list[dict[str, Any]]:
+    async def open_mcp_and_run(
+        self,
+        queries: list[tuple[str, str]],
+        run_id: str,
+        git_commit: str,
+        out_jsonl: Path,
+        resume: bool = False,
+    ) -> list[dict[str, Any]]:
         """Spawn our extended postgres-mcp server via stdio and run optimization across all queries."""
+        done_qids: set[str] = set()
+        if resume and out_jsonl.exists():
+            with out_jsonl.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    if line.strip():
+                        done_qids.add(json.loads(line)["query_id"])
+            if done_qids:
+                print(f"Resuming run '{run_id}': skipping {len(done_qids)} already-logged queries.")
+
         env = dict(os.environ)
         env["DATABASE_URI"] = self.database_uri
         env["PG_MCP_TIMEOUT_SECONDS"] = str(self.config.statement_timeout_s)
@@ -601,7 +691,7 @@ class QueryAdvisorRunner:
 
         server_params = StdioServerParameters(
             command=sys.executable,
-            args=["-c", "import sys, postgres_mcp; sys.argv = ['postgres-mcp', '--access-mode', 'restricted']; postgres_mcp.main()"],
+            args=["-c", "import sys, postgres_mcp; sys.argv = ['postgres-mcp', '--access-mode', 'unrestricted']; postgres_mcp.main()"],
             env=env,
         )
 
@@ -616,8 +706,11 @@ class QueryAdvisorRunner:
                 openai_tools = _mcp_tools_to_openai(tools_resp.tools, allowed)
 
                 out_jsonl.parent.mkdir(parents=True, exist_ok=True)
-                with out_jsonl.open("w", encoding="utf-8") as fh:
+                mode = "a" if (resume and out_jsonl.exists()) else "w"
+                with out_jsonl.open(mode, encoding="utf-8") as fh:
                     for idx, (qid, sql) in enumerate(queries, 1):
+                        if qid in done_qids:
+                            continue
                         q_records = await self.optimize_query(
                             session, gemini_tools, openai_tools, qid, sql, run_id, git_commit
                         )

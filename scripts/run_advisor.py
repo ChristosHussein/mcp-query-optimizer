@@ -36,9 +36,18 @@ def main() -> None:
         choices=["mcp_single_shot", "mcp_iter_cheap", "mcp_iter_hybrid", "mcp_iter_frontier"],
         default="mcp_iter_hybrid",
     )
-    parser.add_argument("--worker-model", default="gemini-3.8-flash", help="Model ID (prefix 'nvidia:' for NVIDIA NIM)")
-    parser.add_argument("--advisor-model", default="nvidia:nvidia/nemotron-3-ultra-550b-a55b", help="Frontier model ID")
+    parser.add_argument(
+        "--worker-model",
+        default="nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b",
+        help="Worker model ID (prefix 'nvidia:' for NVIDIA NIM)",
+    )
+    parser.add_argument(
+        "--advisor-model",
+        default="nvidia:nvidia/nemotron-3-ultra-550b-a55b",
+        help="Frontier Advisor model ID",
+    )
     parser.add_argument("--max-rounds", type=int, default=5)
+    parser.add_argument("--resume", action="store_true", help="Resume an existing --run-id skipping completed query_ids")
     parser.add_argument("--queries", nargs="*", help="Optional specific query IDs (e.g. 17b 18c or q01 q09)")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--run-id", default=None)
@@ -86,7 +95,11 @@ def main() -> None:
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    asyncio.run(runner.open_mcp_and_run(queries, run_id=run_id, git_commit=git_commit(), out_jsonl=out_jsonl))
+    asyncio.run(
+        runner.open_mcp_and_run(
+            queries, run_id=run_id, git_commit=git_commit(), out_jsonl=out_jsonl, resume=args.resume
+        )
+    )
     print(f"\nSaved run log to: {out_jsonl}")
 
 

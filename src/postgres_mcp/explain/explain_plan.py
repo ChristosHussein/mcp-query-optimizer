@@ -158,9 +158,9 @@ class ExplainPlanTool:
             if generic_plan:
                 explain_options.append("GENERIC_PLAN")
 
-            explain_q = f"EXPLAIN ({', '.join(explain_options)}) {query}"
+            explain_q = f"EXPLAIN ({', '.join(explain_options)}) {query.strip().rstrip(';')}"
             logger.debug(f"RUNNING EXPLAIN QUERY: {explain_q}")
-            rows = await self.sql_driver.execute_query(explain_q)  # type: ignore
+            rows = await self.sql_driver.execute_query(explain_q, force_readonly=True)  # type: ignore
             if rows is None:
                 return ErrorResult("No results returned from EXPLAIN")
 
