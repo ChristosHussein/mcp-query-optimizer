@@ -17,6 +17,9 @@ from google import genai
 from mcp import ClientSession
 from mcp import StdioServerParameters
 from mcp.client.stdio import stdio_client
+from openai import OpenAI
+
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -110,6 +113,38 @@ def _mcp_tools_to_gemini(mcp_tools: list[Any], allowed: set[str]) -> list[dict[s
     return declarations
 
 
+def _mcp_tools_to_openai(mcp_tools: list[Any], allowed: set[str]) -> list[dict[str, Any]]:
+    declarations: list[dict[str, Any]] = []
+    for t in mcp_tools:
+        if t.name not in allowed:
+            continue
+        schema = dict(t.inputSchema) if t.inputSchema else {"type": "object", "properties": {}}
+        declarations.append({
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": t.description or t.name,
+                "parameters": schema,
+            },
+        })
+    return declarations
+
+
+def _call_with_retry(fn: Any, max_retries: int = 4) -> Any:
+    """Retry transient rate-limit (429) or 5xx API errors with exponential backoff."""
+    delay = 2.0
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            msg = str(exc).lower()
+            retryable = any(k in msg for k in ("429", "rate limit", "resource_exhausted", "503", "502", "temporarily unavailable"))
+            if not retryable or attempt == max_retries:
+                raise
+            time.sleep(delay)
+            delay *= 2.0
+
+
 def _usage_counts(interaction: Any) -> tuple[int, int, int]:
     u = getattr(interaction, "usage", None)
     if not u:
@@ -127,7 +162,21 @@ class QueryAdvisorRunner:
         self.config = config
         self.database_uri = database_uri
         self.eval_database_uri = eval_database_uri
-        self.genai_client = genai.Client()
+        self._genai_client: genai.Client | None = None
+        self._nvidia_client: OpenAI | None = None
+
+    def _get_genai(self) -> genai.Client:
+        if self._genai_client is None:
+            self._genai_client = genai.Client()
+        return self._genai_client
+
+    def _get_nvidia(self) -> OpenAI:
+        if self._nvidia_client is None:
+            api_key = os.environ.get("NVIDIA_API_KEY")
+            if not api_key:
+                raise RuntimeError("Missing NVIDIA_API_KEY environment variable for 'nvidia:*' model.")
+            self._nvidia_client = OpenAI(base_url=NVIDIA_NIM_BASE_URL, api_key=api_key)
+        return self._nvidia_client
 
     def _select_model(self, round_idx: int, baseline_ms: float, best_ms: float) -> str:
         if self.config.method_id == "mcp_iter_frontier":
@@ -147,10 +196,123 @@ class QueryAdvisorRunner:
         parts = [c.text for c in res.content if getattr(c, "type", None) == "text"]
         return "\n".join(parts)
 
+    async def _run_llm_round(
+        self,
+        session: ClientSession,
+        model: str,
+        system_prompt: str,
+        prompt: str,
+        gemini_tools: list[dict[str, Any]],
+        openai_tools: list[dict[str, Any]],
+    ) -> tuple[str | None, int, int, int, int, float]:
+        """Run one advisory round against either Gemini Interactions API or NVIDIA NIM (OpenAI-compatible)."""
+        calls = 0
+        in_tok = 0
+        out_tok = 0
+        thought_tok = 0
+        wall_ms = 0.0
+        tool_calls_used = 0
+
+        if model.startswith("nvidia:"):
+            nim_model = model.removeprefix("nvidia:")
+            client = self._get_nvidia()
+            messages: list[dict[str, Any]] = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+            while True:
+                t0 = time.perf_counter()
+                resp = _call_with_retry(
+                    lambda: client.chat.completions.create(
+                        model=nim_model,
+                        messages=messages,
+                        tools=openai_tools,
+                        tool_choice="auto",
+                        temperature=0.2,
+                    )
+                )
+                wall_ms += (time.perf_counter() - t0) * 1000.0
+                calls += 1
+                if resp.usage:
+                    in_tok += int(resp.usage.prompt_tokens or 0)
+                    out_tok += int(resp.usage.completion_tokens or 0)
+                    details = getattr(resp.usage, "completion_tokens_details", None)
+                    if details and getattr(details, "reasoning_tokens", None):
+                        thought_tok += int(details.reasoning_tokens)
+
+                msg = resp.choices[0].message
+                if not msg.tool_calls:
+                    text = msg.content or getattr(msg, "reasoning_content", None)
+                    return text, calls, in_tok, out_tok, thought_tok, wall_ms
+
+                messages.append(msg.model_dump(exclude_none=True))
+                for tc in msg.tool_calls:
+                    tool_calls_used += 1
+                    if tool_calls_used > self.config.max_tool_calls_per_round:
+                        tool_out = "Tool call budget for this round reached. Return your final JSON proposal now."
+                    else:
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                            tool_out = await self._call_mcp(session, tc.function.name, args)
+                        except Exception as exc:
+                            tool_out = f"Tool error: {exc}"
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": tool_out[:12000],
+                    })
+
+        # Default: Gemini Interactions API
+        client = self._get_genai()
+        user_input: Any = prompt
+        prev_id: str | None = None
+        while True:
+            t0 = time.perf_counter()
+            interaction = _call_with_retry(
+                lambda: client.interactions.create(
+                    model=model,
+                    input=user_input,
+                    tools=gemini_tools,
+                    system_instruction=system_prompt,
+                    previous_interaction_id=prev_id,
+                )
+            )
+            wall_ms += (time.perf_counter() - t0) * 1000.0
+            calls += 1
+            i_t, o_t, th_t = _usage_counts(interaction)
+            in_tok += i_t
+            out_tok += o_t
+            thought_tok += th_t
+
+            fn_results: list[dict[str, Any]] = []
+            for step in interaction.steps or []:
+                if step.type == "function_call":
+                    tool_calls_used += 1
+                    if tool_calls_used > self.config.max_tool_calls_per_round:
+                        tool_out = "Tool call budget for this round reached. Return your final JSON proposal now."
+                    else:
+                        try:
+                            tool_out = await self._call_mcp(session, step.name, dict(step.arguments or {}))
+                        except Exception as exc:
+                            tool_out = f"Tool error: {exc}"
+                    fn_results.append({
+                        "type": "function_result",
+                        "name": step.name,
+                        "call_id": step.id,
+                        "result": [{"type": "text", "text": tool_out[:12000]}],
+                    })
+
+            if not fn_results:
+                return interaction.output_text, calls, in_tok, out_tok, thought_tok, wall_ms
+
+            user_input = fn_results
+            prev_id = interaction.id
+
     async def optimize_query(
         self,
         session: ClientSession,
         gemini_tools: list[dict[str, Any]],
+        openai_tools: list[dict[str, Any]],
         query_id: str,
         sql: str,
         run_id: str,
@@ -212,51 +374,14 @@ class QueryAdvisorRunner:
                 sql, base_plan_text, last_plan_text, base_ms, best_ms, best_action, history_lines, r, max_rounds
             )
 
-            user_input: Any = prompt
-            prev_id: str | None = None
-            tool_calls_used = 0
-            final_text: str | None = None
-
-            while True:
-                t_llm = time.perf_counter()
-                interaction = self.genai_client.interactions.create(
-                    model=model,
-                    input=user_input,
-                    tools=gemini_tools,
-                    system_instruction=system_prompt,
-                    previous_interaction_id=prev_id,
-                )
-                cum_llm_wall_ms += (time.perf_counter() - t_llm) * 1000.0
-                cum_llm_calls += 1
-                in_t, out_t, th_t = _usage_counts(interaction)
-                cum_in_tok += in_t
-                cum_out_tok += out_t
-                cum_thought_tok += th_t
-
-                fn_results: list[dict[str, Any]] = []
-                for step in interaction.steps or []:
-                    if step.type == "function_call":
-                        tool_calls_used += 1
-                        if tool_calls_used > self.config.max_tool_calls_per_round:
-                            tool_out = "Tool call budget for this round reached. Return your final JSON proposal now."
-                        else:
-                            try:
-                                tool_out = await self._call_mcp(session, step.name, dict(step.arguments or {}))
-                            except Exception as exc:
-                                tool_out = f"Tool error: {exc}"
-                        fn_results.append({
-                            "type": "function_result",
-                            "name": step.name,
-                            "call_id": step.id,
-                            "result": [{"type": "text", "text": tool_out[:12000]}],
-                        })
-
-                if not fn_results:
-                    final_text = interaction.output_text
-                    break
-
-                user_input = fn_results
-                prev_id = interaction.id
+            final_text, r_calls, r_in, r_out, r_th, r_wall = await self._run_llm_round(
+                session, model, system_prompt, prompt, gemini_tools, openai_tools
+            )
+            cum_llm_calls += r_calls
+            cum_in_tok += r_in
+            cum_out_tok += r_out
+            cum_thought_tok += r_th
+            cum_llm_wall_ms += r_wall
 
             proposal = _extract_json_proposal(final_text)
             eval_out = await self._evaluate_proposal(session, sql, base_cost, proposal)
@@ -488,11 +613,14 @@ class QueryAdvisorRunner:
                 await session.initialize()
                 tools_resp = await session.list_tools()
                 gemini_tools = _mcp_tools_to_gemini(tools_resp.tools, allowed)
+                openai_tools = _mcp_tools_to_openai(tools_resp.tools, allowed)
 
                 out_jsonl.parent.mkdir(parents=True, exist_ok=True)
                 with out_jsonl.open("w", encoding="utf-8") as fh:
                     for idx, (qid, sql) in enumerate(queries, 1):
-                        q_records = await self.optimize_query(session, gemini_tools, qid, sql, run_id, git_commit)
+                        q_records = await self.optimize_query(
+                            session, gemini_tools, openai_tools, qid, sql, run_id, git_commit
+                        )
                         for rec in q_records:
                             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                         fh.flush()

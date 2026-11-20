@@ -14,7 +14,9 @@ environment:
     - "hypopg"
     - "pg_stat_statements"
   host_reference: "AMD Ryzen 5 9600X (6C/12T), 31.6 GB RAM, Windows + WSL2 Docker"
-  llm_provider: "Google Gemini API"
+  llm_providers:
+    - "Google Gemini API (gemini-3.8-flash, gemini-4-argon, gemini-embedding-001)"
+    - "NVIDIA NIM OpenAI-compatible API (nvidia/nemotron-3-ultra-550b-a55b, z-ai/glm-5.3-flash)"
 
 benchmarks:
   job:

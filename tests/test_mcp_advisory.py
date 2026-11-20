@@ -7,6 +7,11 @@ import os
 import sys
 from pathlib import Path
 
+from types import SimpleNamespace
+
+from advisor.agent import _extract_json_proposal
+from advisor.agent import _mcp_tools_to_gemini
+from advisor.agent import _mcp_tools_to_openai
 from mcp import ClientSession
 from mcp import StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -46,7 +51,13 @@ def test_unit_helpers() -> None:
     assert parsed.not_used == ["IndexScan(z)"]
     assert len(parsed.warnings) == 1
     assert not parsed.all_applied
-    print("[PASS] Unit checks: normalize_hint_block & parse_hint_notices")
+
+    fake_tool = SimpleNamespace(name="explain_query", description="desc", inputSchema={"type": "object", "properties": {}})
+    assert _mcp_tools_to_openai([fake_tool], {"explain_query"})[0]["function"]["name"] == "explain_query"
+    assert _mcp_tools_to_gemini([fake_tool], {"explain_query"})[0]["name"] == "explain_query"
+    prop = _extract_json_proposal('Analysis:\n```json\n{"action_type": "hints", "hints": "/*+ SeqScan(t) */"}\n```')
+    assert prop is not None and prop["action_type"] == "hints"
+    print("[PASS] Unit checks: hints, parser, provider tool schemas & JSON extraction")
 
 
 async def test_live_imdb_tools() -> None:
@@ -160,5 +171,6 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     test_unit_helpers()
-    asyncio.run(test_live_imdb_tools())
+    if "--unit-only" not in sys.argv:
+        asyncio.run(test_live_imdb_tools())
     print("ALL MCP ADVISORY TESTS PASSED")

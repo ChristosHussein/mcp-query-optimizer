@@ -28,8 +28,6 @@ def git_commit() -> str:
 
 def main() -> None:
     load_dotenv(ROOT / ".env")
-    if not os.environ.get("GEMINI_API_KEY"):
-        sys.exit("Missing GEMINI_API_KEY. Copy .env.example to .env and set GEMINI_API_KEY.")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--benchmark", choices=["job", "tpch"], required=True)
@@ -38,13 +36,21 @@ def main() -> None:
         choices=["mcp_single_shot", "mcp_iter_cheap", "mcp_iter_hybrid", "mcp_iter_frontier"],
         default="mcp_iter_hybrid",
     )
-    parser.add_argument("--worker-model", default="gemini-3.8-flash")
-    parser.add_argument("--advisor-model", default="gemini-4-argon")
+    parser.add_argument("--worker-model", default="gemini-3.8-flash", help="Model ID (prefix 'nvidia:' for NVIDIA NIM)")
+    parser.add_argument("--advisor-model", default="nvidia:nvidia/nemotron-3-ultra-550b-a55b", help="Frontier model ID")
     parser.add_argument("--max-rounds", type=int, default=5)
     parser.add_argument("--queries", nargs="*", help="Optional specific query IDs (e.g. 17b 18c or q01 q09)")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--run-id", default=None)
     args = parser.parse_args()
+
+    used_models = [args.worker_model]
+    if args.method in ("mcp_iter_hybrid", "mcp_iter_frontier"):
+        used_models.append(args.advisor_model)
+    if any(m.startswith("nvidia:") for m in used_models) and not os.environ.get("NVIDIA_API_KEY"):
+        sys.exit("Missing NVIDIA_API_KEY in .env for 'nvidia:*' model.")
+    if any(not m.startswith("nvidia:") for m in used_models) and not os.environ.get("GEMINI_API_KEY"):
+        sys.exit("Missing GEMINI_API_KEY in .env for Gemini model.")
 
     qdir = ROOT / "benchmarks" / args.benchmark / "queries"
     files = sorted(qdir.glob("*.sql"))
