@@ -2,21 +2,21 @@
 # Defines what will be measured, exact protocols, capture paths, and derivations
 # BEFORE experimental runs begin. Changes after observing results must be marked POST_HOC.
 
-contract_version: "0.1.0-draft"
-declared_date: "2026-11-20"
-status: "DRAFT_PRE_RUN"
+contract_version: "1.0.0"
+declared_date: "2026-11-21"
+status: "FROZEN_PRE_RUN"
 thesis_title: "MCP-Driven Query Optimization Advisory for Relational Databases"
 
 environment:
   db_engine: "PostgreSQL 16 (Docker: postgres:16-bookworm)"
   extensions:
-    - "pg_hint_plan"
-    - "hypopg"
-    - "pg_stat_statements"
+    - "pg_hint_plan 1.6.3"
+    - "hypopg 1.4.5"
+    - "pg_stat_statements 1.10"
   host_reference: "AMD Ryzen 5 9600X (6C/12T), 31.6 GB RAM, Windows + WSL2 Docker"
   llm_providers:
-    - "Google Gemini API (gemini-3.8-flash, gemini-4-argon, gemini-embedding-001)"
-    - "NVIDIA NIM OpenAI-compatible API (nvidia/nemotron-3-ultra-550b-a55b, z-ai/glm-5.3-flash)"
+    - "NVIDIA NIM OpenAI-compatible API — Frontier Advisor: nvidia/nemotron-3-ultra-550b-a55b; Cheap Worker: nvidia/nemotron-3.5-super-vl-120b-a12b"
+    - "Google Gemini API — LLMSteer Embeddings: gemini-embedding-001 (dim=3072)"
 
 benchmarks:
   job:
@@ -50,17 +50,17 @@ methods:
   - id: "pg_default"
     description: "Default PostgreSQL 16 optimizer without hints or extra indexes"
   - id: "mcp_single_shot"
-    description: "MCP advisory agent limited to 1 round (K=1)"
+    description: "MCP advisory agent limited to 1 round (K=1) using Cheap Worker (nemotron-3.5-super-vl-120b-a12b)"
   - id: "mcp_iter_cheap"
-    description: "Iterative MCP loop (K<=5) using Cheap Gemini model for all roles"
+    description: "Iterative MCP loop (K<=5) using Cheap Worker (nemotron-3.5-super-vl-120b-a12b) for all roles"
   - id: "mcp_iter_hybrid"
-    description: "Iterative MCP loop (K<=5) using Frontier (Advisor) + Cheap (Worker)"
+    description: "Iterative MCP loop (K<=5) using Cheap Worker (Rounds 1-2) escalating to Frontier Advisor (nemotron-3-ultra-550b-a55b, Rounds 3-5)"
   - id: "mcp_iter_frontier"
-    description: "Optional upper-bound iterative MCP loop (K<=5) using Frontier model"
+    description: "Optional upper-bound iterative MCP loop (K<=5) using Frontier Advisor (nemotron-3-ultra-550b-a55b)"
   - id: "llmsteer_baseline"
-    description: "Classifier (SVM + PCA) over Gemini query embeddings choosing among hint sets"
+    description: "10-fold CV RBF-SVM + PCA over Gemini gemini-embedding-001 SQL embeddings choosing between default and best Bao alternative hint set"
   - id: "bao_oracle"
-    description: "Upper-bound oracle executing each query under fixed Bao hint sets and keeping minimum latency"
+    description: "Upper-bound oracle executing each JOB query under all 49 non-empty Bao join x scan hint sets (deduplicated by physical plan) and keeping minimum latency"
 
 capture_schema:
   raw_results_dir: "results/runs/<run_id>/"
