@@ -13,6 +13,8 @@ __pycache__/
 # Large benchmark datasets & database files (download/generate via scripts)
 data/
 pgdata/
+results/cache/
+results/runs/_smoke*/
 *.tbl
 *.csv
 *.dump

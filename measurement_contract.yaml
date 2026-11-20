@@ -19,14 +19,19 @@ environment:
 benchmarks:
   job:
     database: "imdb"
+    source: "CWI May 2013 IMDb snapshot (https://event.cwi.nl/da/job/imdb.tgz) + gregrahn/join-order-benchmark"
+    physical_design: "Primary Keys (21 tables) + 23 Foreign Key indexes (fkindexes.sql), matching JOB/Bao/LLMOpt"
     query_count: 113
     action_space: "pg_hint_plan hints (scan types, join methods, Leading join order)"
     purpose: "Evaluate plan steering under severe cardinality estimation errors"
   tpch:
     database: "tpch"
+    eval_clone_database: "tpch_eval"
+    source: "DuckDB built-in TPC-H dbgen (SF=10) and tpch_queries()"
+    physical_design: "Primary Keys only (8 tables, no secondary/FK indexes) so HypoPG advisor has optimization headroom"
     scale_factor: 10
     query_count: 22
-    action_space: "HypoPG hypothetical indexes (2-phase evaluation)"
+    action_space: "HypoPG hypothetical indexes (2-phase evaluation: HypoPG EXPLAIN -> real index on tpch_eval)"
     purpose: "Evaluate index recommendation quality"
 
 execution_protocol:

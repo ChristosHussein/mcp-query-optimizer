@@ -1,0 +1,30 @@
+[project]
+name = "mcp-query-optimizer"
+version = "0.1.0"
+description = "MCP-Driven Query Optimization Advisory for Relational Databases (MSc Thesis)"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "psycopg[binary]>=3.3.2",
+    "psycopg-pool>=3.3.0",
+    "mcp[cli]>=1.25.0,<2.0",
+    "google-genai>=1.0.0",
+    "humanize>=4.15.0",
+    "pglast>=6.0",
+    "attrs>=25.4.0",
+    "instructor>=1.14.4",
+    "duckdb>=1.1.0",
+    "pyyaml>=6.0.2",
+    "python-dotenv>=1.0.1",
+    "scikit-learn>=1.5.0",
+    "numpy>=2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/postgres_mcp", "src/advisor"]
+
+[project.scripts]
+postgres-mcp = "postgres_mcp:main"
