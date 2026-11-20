@@ -1,0 +1,14 @@
+{
+  "run_id": "pg_default_job_v1",
+  "git_commit": "fe615948520871ae7bebd55c4552ba28269103ee",
+  "benchmark": "job",
+  "method_id": "pg_default",
+  "query_count": 113,
+  "timeouts": 0,
+  "warmup_runs": 2,
+  "timed_runs": 3,
+  "timeout_ms": 180000,
+  "p50_ms": 154.485,
+  "p90_ms": 2425.952,
+  "total_s": 82.828
+}

@@ -1,0 +1,14 @@
+{
+  "run_id": "pg_default_tpch_v1",
+  "git_commit": "5ec3d355ac6ed29deceda2b8b854b86be2c9edcd",
+  "benchmark": "tpch",
+  "method_id": "pg_default",
+  "query_count": 22,
+  "timeouts": 2,
+  "warmup_runs": 2,
+  "timed_runs": 3,
+  "timeout_ms": 180000,
+  "p50_ms": 2578.065,
+  "p90_ms": 24726.97,
+  "total_s": 456.898
+}
