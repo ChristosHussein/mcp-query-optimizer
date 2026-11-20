@@ -1,0 +1,111 @@
+# Pre-Experiment Measurement Contract (Phase -1)
+# Defines what will be measured, exact protocols, capture paths, and derivations
+# BEFORE experimental runs begin. Changes after observing results must be marked POST_HOC.
+
+contract_version: "0.1.0-draft"
+declared_date: "2026-11-20"
+status: "DRAFT_PRE_RUN"
+thesis_title: "MCP-Driven Query Optimization Advisory for Relational Databases"
+
+environment:
+  db_engine: "PostgreSQL 16 (Docker: postgres:16-bookworm)"
+  extensions:
+    - "pg_hint_plan"
+    - "hypopg"
+    - "pg_stat_statements"
+  host_reference: "AMD Ryzen 5 9600X (6C/12T), 31.6 GB RAM, Windows + WSL2 Docker"
+  llm_provider: "Google Gemini API"
+
+benchmarks:
+  job:
+    database: "imdb"
+    query_count: 113
+    action_space: "pg_hint_plan hints (scan types, join methods, Leading join order)"
+    purpose: "Evaluate plan steering under severe cardinality estimation errors"
+  tpch:
+    database: "tpch"
+    scale_factor: 10
+    query_count: 22
+    action_space: "HypoPG hypothetical indexes (2-phase evaluation)"
+    purpose: "Evaluate index recommendation quality"
+
+execution_protocol:
+  warmup_runs: 2
+  timed_runs: 3
+  aggregation_per_query: "median of timed_runs (ms)"
+  statement_timeout_ms: 180000  # 3 minutes (matches LLMOpt / JOB literature)
+  timeout_handling: "Record timed_out=true and latency_ms=180000; report timeout count separately"
+  index_evaluation_two_phase:
+    phase_1: "Filter candidate indexes using HypoPG + EXPLAIN estimated total cost"
+    phase_2: "Materialize surviving candidate indexes on isolated DB clone, run ANALYZE, measure actual EXPLAIN ANALYZE latency, then drop index"
+
+methods:
+  - id: "pg_default"
+    description: "Default PostgreSQL 16 optimizer without hints or extra indexes"
+  - id: "mcp_single_shot"
+    description: "MCP advisory agent limited to 1 round (K=1)"
+  - id: "mcp_iter_cheap"
+    description: "Iterative MCP loop (K<=5) using Cheap Gemini model for all roles"
+  - id: "mcp_iter_hybrid"
+    description: "Iterative MCP loop (K<=5) using Frontier (Advisor) + Cheap (Worker)"
+  - id: "mcp_iter_frontier"
+    description: "Optional upper-bound iterative MCP loop (K<=5) using Frontier model"
+  - id: "llmsteer_baseline"
+    description: "Classifier (SVM + PCA) over Gemini query embeddings choosing among hint sets"
+  - id: "bao_oracle"
+    description: "Upper-bound oracle executing each query under fixed Bao hint sets and keeping minimum latency"
+
+capture_schema:
+  raw_results_dir: "results/runs/<run_id>/"
+  per_query_log: "results/runs/<run_id>/queries.jsonl"
+  required_fields:
+    - "run_id"
+    - "git_commit"
+    - "timestamp_utc"
+    - "benchmark"          # job | tpch
+    - "query_id"
+    - "method_id"
+    - "round_index"        # 0 = baseline, 1..K = advisor iterations
+    - "model_advisor"
+    - "model_worker"
+    - "proposed_action"    # hint string or CREATE INDEX DDL
+    - "action_valid"       # bool (accepted by pg_hint_plan / Postgres)
+    - "estimated_cost"     # float from EXPLAIN
+    - "warmup_latencies_ms"
+    - "timed_latencies_ms"
+    - "execution_latency_ms"  # median of timed_latencies_ms
+    - "timed_out"          # bool
+    - "llm_calls"          # int cumulative up to round_index
+    - "prompt_tokens"      # int cumulative up to round_index
+    - "completion_tokens"  # int cumulative up to round_index
+    - "llm_wall_time_ms"   # float cumulative
+
+metrics:
+  - metric_id: "exec_latency.p50_ms"
+    unit: "ms"
+    direction: "lower_is_better"
+    derivation: "50th percentile of per-query execution_latency_ms across all benchmark queries"
+  - metric_id: "exec_latency.p90_ms"
+    unit: "ms"
+    direction: "lower_is_better"
+    derivation: "90th percentile of per-query execution_latency_ms across all benchmark queries"
+  - metric_id: "exec_latency.total_s"
+    unit: "s"
+    direction: "lower_is_better"
+    derivation: "Sum of per-query execution_latency_ms / 1000 across all benchmark queries"
+  - metric_id: "plan_quality.improved_pct"
+    unit: "percent"
+    direction: "higher_is_better"
+    derivation: "100 * count(latency < pg_default_latency * 0.95) / N"
+  - metric_id: "plan_quality.regression_pct"
+    unit: "percent"
+    direction: "lower_is_better"
+    derivation: "100 * count(latency > pg_default_latency * 1.05) / N"
+  - metric_id: "cost.mean_llm_calls"
+    unit: "calls/query"
+    direction: "lower_is_better"
+    derivation: "Mean cumulative llm_calls per query at stopping round"
+  - metric_id: "cost.mean_total_tokens"
+    unit: "tokens/query"
+    direction: "lower_is_better"
+    derivation: "Mean cumulative (prompt_tokens + completion_tokens) per query at stopping round"

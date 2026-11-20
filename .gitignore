@@ -1,0 +1,27 @@
+# Secrets & environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Large benchmark datasets & database files (download/generate via scripts)
+data/
+pgdata/
+*.tbl
+*.csv
+*.dump
+*.tar.gz
+*.tgz
+*.zip
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
