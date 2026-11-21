@@ -109,6 +109,7 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `pg_default_tpch_v1` | TPC-H SF=10 (22) | `pg_default` | `5ec3d35` | **DONE** | 2,578.07 | 24,726.97 | 456.898 | 2 (`q17`, `q20`) | `results/runs/pg_default_tpch_v1/queries.jsonl` |
 | `bao_oracle_all48_job_v1` | JOB (113) | `bao_oracle` (`all48`, 49 arms) | `5de8b3c` | **DONE** | 143.14 | 1,708.84 | 52.824 | 0 | `results/runs/bao_oracle_all48_job_v1/queries.jsonl` |
 | `llmsteer_job_v1` | JOB (113) | `llmsteer_baseline` (10-fold CV) | `7fb875e` | **DONE** | 199.76 | 1,986.56 | 81.515 | 0 | `results/runs/llmsteer_job_v1/queries.jsonl` |
+| `mcp_single_shot_tpch_v1` | TPC-H SF=10 (22) | `mcp_single_shot` (K=1, Cheap) | `7fb875e` | **DONE** | 1,675.14 | 11,183.48 | 86.263 | 0 | `results/runs/mcp_single_shot_tpch_v1/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
