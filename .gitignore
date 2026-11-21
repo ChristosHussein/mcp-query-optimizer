@@ -10,6 +10,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Local-only thesis defense study guides (never uploaded to GitHub)
+docs/defense/
+
 # Large benchmark datasets & database files (download/generate via scripts)
 data/
 pgdata/
