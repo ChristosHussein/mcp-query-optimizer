@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime
 from datetime import timezone
@@ -59,10 +60,20 @@ def load_or_compute_embeddings(query_ids: list[str], queries: list[str], model: 
 
     client = genai.Client()
     vecs: list[list[float]] = []
-    batch_size = 32
+    batch_size = 20
     for i in range(0, len(queries), batch_size):
         batch = queries[i : i + batch_size]
-        resp = client.models.embed_content(model=model, contents=batch)
+        for attempt in range(5):
+            try:
+                resp = client.models.embed_content(model=model, contents=batch)
+                break
+            except Exception as exc:
+                if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                    wait_s = 30 * (attempt + 1)
+                    print(f"  [429 rate limit on batch {i // batch_size + 1}] sleeping {wait_s}s...")
+                    time.sleep(wait_s)
+                else:
+                    raise
         for emb in resp.embeddings:
             vecs.append(list(emb.values))
 
