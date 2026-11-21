@@ -219,7 +219,7 @@ class QueryAdvisorRunner:
         prompt: str,
         gemini_tools: list[dict[str, Any]],
         openai_tools: list[dict[str, Any]],
-    ) -> tuple[str | None, int, int, int, int, float]:
+    ) -> tuple[str | None, int, int, int, int, float, list[str]]:
         """Run one advisory round against either Gemini Interactions API or NVIDIA NIM (OpenAI-compatible)."""
         calls = 0
         in_tok = 0
@@ -227,6 +227,7 @@ class QueryAdvisorRunner:
         thought_tok = 0
         wall_ms = 0.0
         tool_calls_used = 0
+        tools_called: list[str] = []
 
         if model.startswith("nvidia:"):
             nim_model = model.removeprefix("nvidia:")
@@ -259,7 +260,7 @@ class QueryAdvisorRunner:
                 msg = resp.choices[0].message
                 if not msg.tool_calls or not tools_allowed:
                     text = msg.content or getattr(msg, "reasoning_content", None)
-                    return text, calls, in_tok, out_tok, thought_tok, wall_ms
+                    return text, calls, in_tok, out_tok, thought_tok, wall_ms, tools_called
 
                 messages.append({
                     "role": "assistant",
@@ -271,6 +272,7 @@ class QueryAdvisorRunner:
                     if tool_calls_used > self.config.max_tool_calls_per_round:
                         tool_out = "Tool call budget reached. Output your final ```json ... ``` proposal now."
                     else:
+                        tools_called.append(tc.function.name)
                         try:
                             args = json.loads(tc.function.arguments or "{}")
                             # Prevent expensive analyze=True inside exploration tool calls
@@ -320,6 +322,7 @@ class QueryAdvisorRunner:
                     if tool_calls_used > self.config.max_tool_calls_per_round:
                         tool_out = "Tool budget reached. Output your final ```json ... ``` proposal now."
                     else:
+                        tools_called.append(step.name)
                         try:
                             args = dict(step.arguments or {})
                             if step.name in ("explain_query", "explain_with_hints") and args.get("analyze"):
@@ -335,7 +338,7 @@ class QueryAdvisorRunner:
                     })
 
             if not fn_results or not tools_allowed:
-                return interaction.output_text, calls, in_tok, out_tok, thought_tok, wall_ms
+                return interaction.output_text, calls, in_tok, out_tok, thought_tok, wall_ms, tools_called
 
             user_input = fn_results
             prev_id = interaction.id
@@ -426,7 +429,7 @@ class QueryAdvisorRunner:
             )
 
             try:
-                final_text, r_calls, r_in, r_out, r_th, r_wall = await self._run_llm_round(
+                final_text, r_calls, r_in, r_out, r_th, r_wall, r_tools = await self._run_llm_round(
                     session, model, system_prompt, prompt, gemini_tools, openai_tools
                 )
             except Exception as exc:
@@ -501,6 +504,7 @@ class QueryAdvisorRunner:
                 "timed_out": eval_out["timed_out"],
                 "feedback": eval_out["feedback"],
                 "rationale": (proposal or {}).get("rationale"),
+                "tools_called": r_tools,
                 "llm_calls": cum_llm_calls,
                 "prompt_tokens": cum_in_tok,
                 "completion_tokens": cum_out_tok,
