@@ -356,14 +356,27 @@ class QueryAdvisorRunner:
         system_prompt = HINTS_SYSTEM_PROMPT if is_hints else INDEX_SYSTEM_PROMPT
 
         # Round 0: Warm-up + measure default PostgreSQL EXPLAIN ANALYZE via MCP (avoids cold-cache bias)
+        base_plan_text = ""
         for _ in range(max(0, self.config.eval_warmup_runs)):
             warm_out = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": True})
             if warm_out.startswith("Error:"):
+                base_plan_text = warm_out
                 break
-        base_plan_text = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": True})
+        if not base_plan_text:
+            base_plan_text = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": True})
+
+        base_timed_out = False
         if base_plan_text.startswith("Error:"):
             print(f"  [WARN] Baseline EXPLAIN ANALYZE error on {query_id}: {base_plan_text[:300]}")
-        base_ms = _parse_execution_time_ms(base_plan_text)
+            err_low = base_plan_text.lower()
+            if "timeout" in err_low or "canceling statement" in err_low:
+                base_timed_out = True
+                est_plan = await self._call_mcp(session, "explain_query", {"sql": sql, "analyze": False})
+                base_plan_text = (
+                    f"NOTE: Baseline EXPLAIN ANALYZE timed out after {self.config.statement_timeout_s}s; "
+                    f"showing estimated EXPLAIN plan below.\n{est_plan}"
+                )
+        base_ms = float(self.config.statement_timeout_s * 1000) if base_timed_out else _parse_execution_time_ms(base_plan_text)
         base_cost = _parse_root_cost(base_plan_text)
 
         records.append({
@@ -381,7 +394,7 @@ class QueryAdvisorRunner:
             "action_valid": True,
             "estimated_cost": base_cost,
             "execution_latency_ms": base_ms,
-            "timed_out": base_ms is None,
+            "timed_out": base_timed_out or (base_ms is None),
             "llm_calls": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
