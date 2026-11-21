@@ -1,0 +1,23 @@
+{
+  "run_id": "llmsteer_job_v1",
+  "git_commit": "7fb875e7c49afdcebf5cffa342485a377fe146d6",
+  "benchmark": "job",
+  "method_id": "llmsteer_baseline",
+  "embed_model": "gemini-embedding-001",
+  "alt_arm_index": 9,
+  "alt_arm_label": "no_nestloop,no_indexscan",
+  "query_count": 113,
+  "pg_default_p50_ms": 155.107,
+  "pg_default_p90_ms": 2208.438,
+  "pg_default_total_s": 77.501,
+  "llmsteer_p50_ms": 199.761,
+  "llmsteer_p90_ms": 1986.563,
+  "llmsteer_total_s": 81.515,
+  "binary_optimal_total_s": 57.219,
+  "improved_pct": 7.08,
+  "regression_pct": 10.62,
+  "accuracy": 0.823,
+  "precision": 0.381,
+  "recall": 0.5333,
+  "auroc": 0.6966
+}

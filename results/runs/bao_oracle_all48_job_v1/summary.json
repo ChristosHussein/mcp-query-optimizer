@@ -1,0 +1,16 @@
+{
+  "run_id": "bao_oracle_all48_job_v1",
+  "git_commit": "5de8b3ca0195e1d332b87a358fb4c54f1cb893eb",
+  "benchmark": "job",
+  "method_id": "bao_oracle",
+  "arms_mode": "all48",
+  "num_arms": 49,
+  "query_count": 113,
+  "default_p50_ms": 155.107,
+  "default_p90_ms": 2208.438,
+  "default_total_s": 77.501,
+  "oracle_p50_ms": 143.14,
+  "oracle_p90_ms": 1708.844,
+  "oracle_total_s": 52.824,
+  "improved_pct": 44.25
+}
