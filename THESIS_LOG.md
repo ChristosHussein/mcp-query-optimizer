@@ -113,6 +113,7 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `mcp_iter_cheap_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_cheap` (K≤5, Cheap) | `3f971ba` | **DONE** | 1,036.56 | 10,259.20 | 73.134 | 0 | `results/runs/mcp_iter_cheap_tpch_v1/queries.jsonl` |
 | `mcp_iter_hybrid_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_hybrid` (K≤5, Hybrid) | `f8f4745` | **DONE** | 1,055.06 | 10,950.73 | 72.923 | 0 | `results/runs/mcp_iter_hybrid_tpch_v1/queries.jsonl` |
 | `mcp_single_shot_job_v1` | JOB (113) | `mcp_single_shot` (K=1, Cheap) | `dd76bb4` | **DONE** | 145.13 | 1,523.65 | 68.624 | 0 | `results/runs/mcp_single_shot_job_v1/queries.jsonl` |
+| `mcp_iter_cheap_job_v1` | JOB (113) | `mcp_iter_cheap` (K≤5, Cheap) | `cde1fdc` | **DONE** | 131.38 | 1,310.64 | 53.014 | 0 | `results/runs/mcp_iter_cheap_job_v1/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
