@@ -19,6 +19,7 @@ data/
 pgdata/
 results/cache/
 results/runs/_smoke*/
+results/runs/speeduptest*/
 *.tbl
 *.csv
 *.dump
