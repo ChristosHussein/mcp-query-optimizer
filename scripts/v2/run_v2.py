@@ -85,10 +85,18 @@ def extract_json_proposal(text: str | None) -> dict[str, Any] | None:
     if not text:
         return None
     fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL)
-    candidates = fenced if fenced else re.findall(r"(\{.*\})", text, flags=re.DOTALL)
-    for raw in reversed(candidates):
+    for raw in reversed(fenced):
         try:
             parsed = json.loads(raw)
+            if isinstance(parsed, dict) and "action_type" in parsed:
+                return parsed
+        except json.JSONDecodeError:
+            continue
+    # Fallback: scan backwards for valid JSON objects without greedy .* spanning prose
+    dec = json.JSONDecoder()
+    for m in reversed(list(re.finditer(r"\{", text))):
+        try:
+            parsed, _ = dec.raw_decode(text, m.start())
             if isinstance(parsed, dict) and "action_type" in parsed:
                 return parsed
         except json.JSONDecodeError:
@@ -97,16 +105,23 @@ def extract_json_proposal(text: str | None) -> dict[str, Any] | None:
 
 
 def extract_from_tables(sql: str) -> list[str]:
-    m = re.search(r"\bFROM\b(.*?)\bWHERE\b", sql, flags=re.IGNORECASE | re.DOTALL)
-    if not m:
-        return []
+    """Extract all table names across FROM lists, explicit JOINs, CTEs, and subqueries."""
     tables: list[str] = []
-    for part in m.group(1).split(","):
-        tok = part.strip().split()[0].strip().strip('"')
-        if "." in tok:
-            tok = tok.split(".")[-1]
+    # 1) Explicit JOIN <table>
+    for m in re.finditer(r"\bJOIN\s+([a-zA-Z_][a-zA-Z0-9_.\"]*)", sql, flags=re.IGNORECASE):
+        tok = m.group(1).strip('"').split(".")[-1]
         if tok and tok not in tables:
             tables.append(tok)
+    # 2) All FROM ... blocks (comma-separated tables in main query or subqueries)
+    for m in re.finditer(
+        r"\bFROM\s+(.*?)(?=\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|\bHAVING\b|\bJOIN\b|\bLEFT\b|\bRIGHT\b|\bINNER\b|\bOUTER\b|\)|\Z)",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        for part in m.group(1).split(","):
+            tok = part.strip().split()[0].strip().strip('"').split(".")[-1] if part.strip() else ""
+            if tok and tok[0].isalpha() and tok.upper() not in ("SELECT", "LATERAL") and tok not in tables:
+                tables.append(tok)
     return tables
 
 
@@ -380,7 +395,7 @@ async def optimize_one_query(
         for rec in records:
             out_fh.write(json.dumps(rec) + "\n")
         out_fh.flush()
-    print(f"  [DONE] {qid:4s} | base={base_ms:8.1f} ms -> best={best_ms:8.1f} ms ({base_ms/best_ms:5.2f}x) | calls={cum_calls} tok={cum_in+cum_out:,}")
+    print(f"  [DONE] {qid:4s} | base={base_ms:8.1f} ms -> best={best_ms:8.1f} ms ({base_ms/max(best_ms, 1e-6):5.2f}x) | calls={cum_calls} tok={cum_in+cum_out:,}")
 
 
 async def evaluate_proposal(
@@ -443,7 +458,17 @@ async def evaluate_proposal(
             action_cache[key] = out
             return out
 
-        data = json.loads(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return {
+                "proposed_action": hints,
+                "action_valid": False,
+                "estimated_cost": None,
+                "execution_latency_ms": None,
+                "timed_out": False,
+                "feedback": f"Non-JSON MCP response ({exc}): {raw[:200]}",
+            }
         hr = data["hint_report"]
         out = {
             "proposed_action": data["hints"],
@@ -530,7 +555,17 @@ async def evaluate_proposal(
         action_cache[key] = out
         return out
 
-    p2 = json.loads(p2_raw)
+    try:
+        p2 = json.loads(p2_raw)
+    except json.JSONDecodeError as exc:
+        return {
+            "proposed_action": indexes,
+            "action_valid": False,
+            "estimated_cost": hypo_cost,
+            "execution_latency_ms": None,
+            "timed_out": False,
+            "feedback": f"Non-JSON Phase-2 response ({exc}): {p2_raw[:200]}",
+        }
     out = {
         "proposed_action": indexes,
         "action_valid": not p2.get("timed_out", False),
@@ -579,7 +614,9 @@ async def run_all(args: argparse.Namespace) -> None:
         with out_jsonl.open("r", encoding="utf-8") as fh:
             for line in fh:
                 if line.strip():
-                    done_qids.add(json.loads(line)["query_id"])
+                    rec = json.loads(line)
+                    if rec.get("round_index") == args.fixed_rounds:
+                        done_qids.add(rec["query_id"])
         if done_qids:
             print(f"Resuming '{run_id}': skipping {len(done_qids)} completed queries.")
 
@@ -631,9 +668,12 @@ async def run_all(args: argparse.Namespace) -> None:
             with out_jsonl.open(mode, encoding="utf-8") as out_fh:
                 async def _task(qid: str, sql: str) -> None:
                     async with sem:
-                        await optimize_one_query(
-                            client, session, db_lock, file_lock, out_fh, openai_tools, qid, sql, args, run_id, commit
-                        )
+                        try:
+                            await optimize_one_query(
+                                client, session, db_lock, file_lock, out_fh, openai_tools, qid, sql, args, run_id, commit
+                            )
+                        except Exception as exc:
+                            print(f"  [ERR] Unhandled exception on {qid}: {exc}")
 
                 await asyncio.gather(*[_task(q, s) for q, s in pending])
 
