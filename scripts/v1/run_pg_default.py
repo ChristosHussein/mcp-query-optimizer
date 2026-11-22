@@ -21,7 +21,7 @@ from typing import Any
 
 import psycopg
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def git_commit() -> str:

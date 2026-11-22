@@ -1,0 +1,64 @@
+# Pre-Experiment Measurement Contract — Phase 2 (v2.0.0)
+# Fixed-K (K=20) Pareto Frontier, 3-Tier Model Comparison, and Anti-Contamination Validation.
+
+contract_version: "2.0.0"
+declared_date: "2026-11-23"
+status: "FROZEN_PRE_RUN"
+thesis_title: "MCP-Driven Query Optimization Advisory for Relational Databases"
+
+execution_engine:
+  concurrency_llm: 4
+  db_timing_serialization: "strict asyncio.Lock around every PostgreSQL EXPLAIN ANALYZE / Phase-2 real index build (zero DB contention)"
+  static_prefetch: "get_table_stats pre-fetched once at Round 0 per query"
+  reasoning_budget: "unbounded (full thinking, apples-to-apples with v1)"
+  fixed_rounds_K: 20
+  early_stopping: "DISABLED (all K=20 rounds executed on every query; repeated identical proposals served from per-query cache to force exploration)"
+  statement_timeout_ms: 180000
+
+hybrid_escalation_rule:
+  derived_from: "v1 pg_default empirical median within-run spread (JOB=7.92%, TPC-H=6.12%) + 10 percentage-point margin"
+  threshold_pct: 18.0
+  rule: "Rounds 1-2 use 120B Worker; Rounds 3-20 escalate to 550B Frontier Advisor if best latency reduction over Round-0 baseline is < 18.0%"
+
+methods:
+  - id: "v2_120b"
+    model_worker: "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"
+    model_advisor: null
+    description: "Fixed K=20 rounds using 120B Worker throughout"
+  - id: "v2_550b"
+    model_worker: "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
+    model_advisor: "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
+    description: "Fixed K=20 rounds using 550B Frontier Advisor throughout"
+  - id: "v2_hybrid"
+    model_worker: "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"
+    model_advisor: "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
+    description: "Fixed K=20 rounds: 120B on R1-R2, escalating to 550B on R3-R20 if latency gain < 18%"
+
+benchmarks:
+  job_top12:
+    database: "imdb"
+    selection_rule: "Top 12 slowest queries by official v1 pg_default_job_v1 latency (~58% of total JOB runtime)"
+    queries: ["16b", "19d", "17e", "17a", "17f", "31c", "25c", "10c", "17d", "17c", "17b", "31a"]
+    action_space: "pg_hint_plan hints"
+  tpch_top8:
+    database: "tpch"
+    eval_clone_database: "tpch_eval"
+    selection_rule: "Top 8 slowest queries by official v1 pg_default_tpch_v1 latency (~94% of total TPC-H runtime)"
+    queries: ["q17", "q20", "q18", "q13", "q01", "q09", "q10", "q03"]
+    action_space: "2-phase HypoPG -> tpch_eval real B-tree indexes"
+  imdb_anon:
+    database: "imdb"
+    schema: "anon"
+    selection_rule: "Schema-anonymized opaque-view mirror (t01..t21, c01..cN) of job_top12 (zero IMDb identifiers; identical data skew)"
+    queries: ["16b", "19d", "17e", "17a", "17f", "31c", "25c", "10c", "17d", "17c", "17b", "31a"]
+    action_space: "pg_hint_plan hints"
+  synth_skew:
+    database: "synth_skew"
+    selection_rule: "Brand-new custom skewed multi-join relational database generated locally (0% pretraining exposure)"
+    action_space: "pg_hint_plan hints"
+
+primary_outcomes:
+  - "Latency vs. Fixed Round K (K=1..20) Pareto curves per method"
+  - "Cumulative Token Usage vs. Latency reduction (solving optimal K*)"
+  - "Head-to-head comparison: 120B vs. 550B vs. Hybrid (18% noise-derived escalation)"
+  - "Anti-contamination delta: job_top12 vs. imdb_anon & unseen synth_skew generalization"

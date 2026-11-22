@@ -30,5 +30,6 @@ results/runs/speeduptest*/
 # OS / Editor
 .DS_Store
 Thumbs.db
+~$*.xlsx
 .vscode/
 .idea/

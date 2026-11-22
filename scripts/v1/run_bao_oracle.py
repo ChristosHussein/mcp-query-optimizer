@@ -25,7 +25,7 @@ from typing import Any
 
 import psycopg
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 JOIN_KNOBS = ("enable_hashjoin", "enable_mergejoin", "enable_nestloop")
 SCAN_KNOBS = ("enable_seqscan", "enable_indexscan", "enable_indexonlyscan")
