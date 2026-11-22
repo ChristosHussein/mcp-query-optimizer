@@ -120,7 +120,7 @@ def extract_from_tables(sql: str) -> list[str]:
     ):
         for part in m.group(1).split(","):
             tok = part.strip().split()[0].strip().strip('"').split(".")[-1] if part.strip() else ""
-            if tok and tok[0].isalpha() and tok.upper() not in ("SELECT", "LATERAL") and tok not in tables:
+            if tok and re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]*", tok) and tok.upper() not in ("SELECT", "LATERAL") and tok not in tables:
                 tables.append(tok)
     return tables
 
