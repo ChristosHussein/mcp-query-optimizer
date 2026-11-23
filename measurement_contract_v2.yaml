@@ -51,10 +51,13 @@ benchmarks:
     schema: "anon"
     selection_rule: "Schema-anonymized opaque-view mirror (t01..t21, c01..cN) of job_top12 (zero IMDb identifiers; identical data skew)"
     queries: ["16b", "19d", "17e", "17a", "17f", "31c", "25c", "10c", "17d", "17c", "17b", "31a"]
+    fixed_rounds_K: "K* (optimal loop budget solved from job_top12/tpch_top8 K=20 Pareto sweep)"
     action_space: "pg_hint_plan hints"
-  synth_skew:
-    database: "synth_skew"
-    selection_rule: "Brand-new custom skewed multi-join relational database generated locally (0% pretraining exposure)"
+  stats_ceb:
+    database: "stats_ceb"
+    source: "STATS-CEB (VLDB 2022, real-world Stats StackExchange relational database, 8 tables)"
+    selection_rule: "Top 12 slowest queries in PostgreSQL 16 (real-world non-IMDb/non-TPC-H generalization test)"
+    fixed_rounds_K: "K* (optimal loop budget solved from K=20 Pareto sweep)"
     action_space: "pg_hint_plan hints"
 
 primary_outcomes:
