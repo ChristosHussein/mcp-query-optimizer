@@ -177,16 +177,17 @@ async def optimize_one_query(
                 break
 
     base_timed_out = False
-    if base_plan.startswith("Error:"):
+    parsed_base_ms = parse_execution_time_ms(base_plan)
+    if parsed_base_ms is None:
         low = base_plan.lower()
-        if "timeout" in low or "canceling statement" in low:
+        if "timeout" in low or "canceling statement" in low or "timed out" in low:
             base_timed_out = True
             est_plan = await call_mcp(session, db_lock, "explain_query", {"sql": sql, "analyze": False}, serialize=False)
             base_plan = (
                 f"NOTE: Baseline EXPLAIN ANALYZE timed out after {args.timeout_s}s; "
                 f"showing estimated EXPLAIN plan below.\n{est_plan}"
             )
-    base_ms = float(args.timeout_s * 1000) if base_timed_out else parse_execution_time_ms(base_plan)
+    base_ms = float(args.timeout_s * 1000) if base_timed_out else parsed_base_ms
     base_cost = parse_root_cost(base_plan)
 
     # Pre-fetch get_table_stats once at Round 0
@@ -562,13 +563,14 @@ async def evaluate_proposal(
             "timed_out": False,
             "feedback": f"Non-JSON Phase-2 response ({exc}): {p2_raw[:200]}",
         }
+    exec_ms = p2.get("median_execution_ms") if p2.get("median_execution_ms") is not None else p2.get("execution_time_ms")
     out = {
         "proposed_action": indexes,
-        "action_valid": not p2.get("timed_out", False),
+        "action_valid": (not p2.get("timed_out", False)) and (exec_ms is not None),
         "estimated_cost": p2.get("total_cost", hypo_cost),
-        "execution_latency_ms": p2.get("execution_time_ms"),
+        "execution_latency_ms": exec_ms,
         "timed_out": bool(p2.get("timed_out", False)),
-        "feedback": f"Phase-2 real index exec={p2.get('execution_time_ms')} ms (created {len(p2.get('created_indexes', []))} idx, dropped cleanly)",
+        "feedback": f"Phase-2 materialized in {p2.get('index_build_times_ms')} ms -> actual {exec_ms} ms",
         "plan_text": p2.get("plan_text"),
     }
     action_cache[key] = out
