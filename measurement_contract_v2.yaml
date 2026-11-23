@@ -44,6 +44,7 @@ benchmarks:
     eval_clone_database: "tpch_eval"
     selection_rule: "Top 8 slowest queries by official v1 pg_default_tpch_v1 latency (~94% of total TPC-H runtime)"
     queries: ["q17", "q20", "q18", "q13", "q01", "q09", "q10", "q03"]
+    fixed_rounds_K: "K* (optimal loop budget solved from job_top12 K=20 Pareto sweep; all 3 LLM modes)"
     action_space: "2-phase HypoPG -> tpch_eval real B-tree indexes"
   imdb_anon:
     database: "imdb"

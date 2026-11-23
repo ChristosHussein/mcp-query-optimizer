@@ -162,9 +162,9 @@ async def optimize_one_query(
     run_id: str,
     commit: str,
 ) -> None:
-    is_hints = args.benchmark in ("job", "imdb_anon", "synth_skew")
+    is_hints = args.benchmark in ("job", "imdb_anon", "stats_ceb")
     system_prompt = HINTS_SYSTEM_PROMPT if is_hints else INDEX_SYSTEM_PROMPT
-    schema_name = "anon" if args.benchmark == "imdb_anon" else "public"
+    schema_name = "public"
 
     # Round 0: Strictly serialized warm-up + baseline EXPLAIN ANALYZE
     base_plan = ""
@@ -591,11 +591,11 @@ async def run_all(args: argparse.Namespace) -> None:
     elif args.benchmark == "imdb_anon":
         qdir = ROOT / "benchmarks" / "imdb_anon" / "queries"
         default_q = JOB_TOP12
-        dbname, eval_db = "imdb", None
+        dbname, eval_db = "imdb_anon", None
     else:
-        qdir = ROOT / "benchmarks" / "synth_skew" / "queries"
+        qdir = ROOT / "benchmarks" / "stats_ceb" / "queries"
         default_q = sorted(p.stem for p in qdir.glob("*.sql"))
-        dbname, eval_db = "synth_skew", None
+        dbname, eval_db = "stats_ceb", None
 
     qids = args.queries if args.queries else default_q
     queries = [(qid, (qdir / f"{qid}.sql").read_text(encoding="utf-8")) for qid in qids]
@@ -678,7 +678,7 @@ async def run_all(args: argparse.Namespace) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--benchmark", choices=["job", "tpch", "imdb_anon", "synth_skew"], required=True)
+    p.add_argument("--benchmark", choices=["job", "tpch", "imdb_anon", "stats_ceb"], required=True)
     p.add_argument("--method", choices=["v2_120b", "v2_550b", "v2_hybrid"], required=True)
     p.add_argument("--worker-model", default=WORKER_DEFAULT)
     p.add_argument("--advisor-model", default=FRONTIER_DEFAULT)
