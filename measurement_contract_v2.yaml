@@ -44,20 +44,21 @@ benchmarks:
     eval_clone_database: "tpch_eval"
     selection_rule: "Top 8 slowest queries by official v1 pg_default_tpch_v1 latency (~94% of total TPC-H runtime)"
     queries: ["q17", "q20", "q18", "q13", "q01", "q09", "q10", "q03"]
-    fixed_rounds_K: "K* (optimal loop budget solved from job_top12 K=20 Pareto sweep; all 3 LLM modes)"
+    fixed_rounds_K: 6  # K* = 6 solved from job_top12 K=20 Pareto frontier (96% of 120B max gain at 25% tokens)
     action_space: "2-phase HypoPG -> tpch_eval real B-tree indexes"
   imdb_anon:
-    database: "imdb"
-    schema: "anon"
-    selection_rule: "Schema-anonymized opaque-view mirror (t01..t21, c01..cN) of job_top12 (zero IMDb identifiers; identical data skew)"
+    database: "imdb_anon"
+    schema: "public"
+    selection_rule: "Leak-free renamed clone (t01..t21, c01..cN, idx_01..idx_44) of job_top12 (zero IMDb identifiers; identical data skew)"
     queries: ["16b", "19d", "17e", "17a", "17f", "31c", "25c", "10c", "17d", "17c", "17b", "31a"]
-    fixed_rounds_K: "K* (optimal loop budget solved from job_top12/tpch_top8 K=20 Pareto sweep)"
+    fixed_rounds_K: 6
     action_space: "pg_hint_plan hints"
   stats_ceb:
     database: "stats_ceb"
-    source: "STATS-CEB (VLDB 2022, real-world Stats StackExchange relational database, 8 tables)"
-    selection_rule: "Top 12 slowest queries in PostgreSQL 16 (real-world non-IMDb/non-TPC-H generalization test)"
-    fixed_rounds_K: "K* (optimal loop budget solved from K=20 Pareto sweep)"
+    source: "STATS-CEB (VLDB 2022, real-world Stats StackExchange relational database, 8 tables, 146 queries)"
+    selection_rule: "Top 12 slowest queries in PostgreSQL 16 (4 hitting 60s timeout + 8 taking 15-52s; ~443s total)"
+    queries: ["s126", "s122", "s120", "s058", "s135", "s068", "s108", "s030", "s107", "s034", "s143", "s070"]
+    fixed_rounds_K: 6
     action_space: "pg_hint_plan hints"
 
 primary_outcomes:

@@ -1,0 +1,223 @@
+{
+  "tables": {
+    "aka_name": "t01",
+    "aka_title": "t02",
+    "cast_info": "t03",
+    "char_name": "t04",
+    "comp_cast_type": "t05",
+    "company_name": "t06",
+    "company_type": "t07",
+    "complete_cast": "t08",
+    "info_type": "t09",
+    "keyword": "t10",
+    "kind_type": "t11",
+    "link_type": "t12",
+    "movie_companies": "t13",
+    "movie_info": "t14",
+    "movie_info_idx": "t15",
+    "movie_keyword": "t16",
+    "movie_link": "t17",
+    "name": "t18",
+    "person_info": "t19",
+    "role_type": "t20",
+    "title": "t21"
+  },
+  "columns": {
+    "aka_name": {
+      "id": "c01",
+      "person_id": "c02",
+      "name": "c03",
+      "imdb_index": "c04",
+      "name_pcode_cf": "c05",
+      "name_pcode_nf": "c06",
+      "surname_pcode": "c07",
+      "md5sum": "c08"
+    },
+    "aka_title": {
+      "id": "c01",
+      "movie_id": "c02",
+      "title": "c03",
+      "imdb_index": "c04",
+      "kind_id": "c05",
+      "production_year": "c06",
+      "phonetic_code": "c07",
+      "episode_of_id": "c08",
+      "season_nr": "c09",
+      "episode_nr": "c10",
+      "note": "c11",
+      "md5sum": "c12"
+    },
+    "cast_info": {
+      "id": "c01",
+      "person_id": "c02",
+      "movie_id": "c03",
+      "person_role_id": "c04",
+      "note": "c05",
+      "nr_order": "c06",
+      "role_id": "c07"
+    },
+    "char_name": {
+      "id": "c01",
+      "name": "c02",
+      "imdb_index": "c03",
+      "imdb_id": "c04",
+      "name_pcode_nf": "c05",
+      "surname_pcode": "c06",
+      "md5sum": "c07"
+    },
+    "comp_cast_type": {
+      "id": "c01",
+      "kind": "c02"
+    },
+    "company_name": {
+      "id": "c01",
+      "name": "c02",
+      "country_code": "c03",
+      "imdb_id": "c04",
+      "name_pcode_nf": "c05",
+      "name_pcode_sf": "c06",
+      "md5sum": "c07"
+    },
+    "company_type": {
+      "id": "c01",
+      "kind": "c02"
+    },
+    "complete_cast": {
+      "id": "c01",
+      "movie_id": "c02",
+      "subject_id": "c03",
+      "status_id": "c04"
+    },
+    "info_type": {
+      "id": "c01",
+      "info": "c02"
+    },
+    "keyword": {
+      "id": "c01",
+      "keyword": "c02",
+      "phonetic_code": "c03"
+    },
+    "kind_type": {
+      "id": "c01",
+      "kind": "c02"
+    },
+    "link_type": {
+      "id": "c01",
+      "link": "c02"
+    },
+    "movie_companies": {
+      "id": "c01",
+      "movie_id": "c02",
+      "company_id": "c03",
+      "company_type_id": "c04",
+      "note": "c05"
+    },
+    "movie_info": {
+      "id": "c01",
+      "movie_id": "c02",
+      "info_type_id": "c03",
+      "info": "c04",
+      "note": "c05"
+    },
+    "movie_info_idx": {
+      "id": "c01",
+      "movie_id": "c02",
+      "info_type_id": "c03",
+      "info": "c04",
+      "note": "c05"
+    },
+    "movie_keyword": {
+      "id": "c01",
+      "movie_id": "c02",
+      "keyword_id": "c03"
+    },
+    "movie_link": {
+      "id": "c01",
+      "movie_id": "c02",
+      "linked_movie_id": "c03",
+      "link_type_id": "c04"
+    },
+    "name": {
+      "id": "c01",
+      "name": "c02",
+      "imdb_index": "c03",
+      "imdb_id": "c04",
+      "gender": "c05",
+      "name_pcode_cf": "c06",
+      "name_pcode_nf": "c07",
+      "surname_pcode": "c08",
+      "md5sum": "c09"
+    },
+    "person_info": {
+      "id": "c01",
+      "person_id": "c02",
+      "info_type_id": "c03",
+      "info": "c04",
+      "note": "c05"
+    },
+    "role_type": {
+      "id": "c01",
+      "role": "c02"
+    },
+    "title": {
+      "id": "c01",
+      "title": "c02",
+      "imdb_index": "c03",
+      "kind_id": "c04",
+      "production_year": "c05",
+      "imdb_id": "c06",
+      "phonetic_code": "c07",
+      "episode_of_id": "c08",
+      "season_nr": "c09",
+      "episode_nr": "c10",
+      "series_years": "c11",
+      "md5sum": "c12"
+    }
+  },
+  "indexes": {
+    "aka_name_pkey": "idx_01",
+    "aka_title_pkey": "idx_02",
+    "cast_info_pkey": "idx_03",
+    "char_name_pkey": "idx_04",
+    "comp_cast_type_pkey": "idx_05",
+    "company_id_movie_companies": "idx_06",
+    "company_name_pkey": "idx_07",
+    "company_type_id_movie_companies": "idx_08",
+    "company_type_pkey": "idx_09",
+    "complete_cast_pkey": "idx_10",
+    "info_type_id_movie_info": "idx_11",
+    "info_type_id_movie_info_idx": "idx_12",
+    "info_type_id_person_info": "idx_13",
+    "info_type_pkey": "idx_14",
+    "keyword_id_movie_keyword": "idx_15",
+    "keyword_pkey": "idx_16",
+    "kind_id_aka_title": "idx_17",
+    "kind_id_title": "idx_18",
+    "kind_type_pkey": "idx_19",
+    "link_type_id_movie_link": "idx_20",
+    "link_type_pkey": "idx_21",
+    "linked_movie_id_movie_link": "idx_22",
+    "movie_companies_pkey": "idx_23",
+    "movie_id_aka_title": "idx_24",
+    "movie_id_cast_info": "idx_25",
+    "movie_id_complete_cast": "idx_26",
+    "movie_id_movie_companies": "idx_27",
+    "movie_id_movie_info": "idx_28",
+    "movie_id_movie_info_idx": "idx_29",
+    "movie_id_movie_keyword": "idx_30",
+    "movie_id_movie_link": "idx_31",
+    "movie_info_idx_pkey": "idx_32",
+    "movie_info_pkey": "idx_33",
+    "movie_keyword_pkey": "idx_34",
+    "movie_link_pkey": "idx_35",
+    "name_pkey": "idx_36",
+    "person_id_aka_name": "idx_37",
+    "person_id_cast_info": "idx_38",
+    "person_id_person_info": "idx_39",
+    "person_info_pkey": "idx_40",
+    "person_role_id_cast_info": "idx_41",
+    "role_id_cast_info": "idx_42",
+    "role_type_pkey": "idx_43",
+    "title_pkey": "idx_44"
+  }
+}
