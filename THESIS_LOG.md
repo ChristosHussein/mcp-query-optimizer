@@ -117,6 +117,7 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `mcp_iter_hybrid_job_v1` | JOB (113) | `mcp_iter_hybrid` (K≤5, Hybrid) | `6f98ee9` | **DONE** | 183.38 | 1,796.20 | 69.539 | 0 | `results/runs/mcp_iter_hybrid_job_v1/queries.jsonl` |
 | `v2_120b_job_top12` | JOB Top-12 (`v2`) | `v2_120b` (K=20 fixed, 120B) | `1eb9ba2` | **DONE** | 1,263.15 | 2,072.88 | 15.010 | 0 | `results/runs/v2_120b_job_top12/queries.jsonl` |
 | `v2_550b_job_top12` | JOB Top-12 (`v2`) | `v2_550b` (K=20 fixed, 550B) | `097c4d9` | **DONE** | 1,152.30 | 2,905.70 | 18.550 | 0 | `results/runs/v2_550b_job_top12/queries.jsonl` |
+| `v2_hybrid_job_top12` | JOB Top-12 (`v2`) | `v2_hybrid` (K=20 alternating 120B↔550B) | `c13b67f` | **DONE** | 1,093.10 | 2,017.03 | 14.040 | 0 | `results/runs/v2_hybrid_job_top12/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
