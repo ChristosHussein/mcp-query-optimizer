@@ -115,6 +115,8 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `mcp_single_shot_job_v1` | JOB (113) | `mcp_single_shot` (K=1, Cheap) | `dd76bb4` | **DONE** | 145.13 | 1,523.65 | 68.624 | 0 | `results/runs/mcp_single_shot_job_v1/queries.jsonl` |
 | `mcp_iter_cheap_job_v1` | JOB (113) | `mcp_iter_cheap` (K≤5, Cheap) | `cde1fdc` | **DONE** | 131.38 | 1,310.64 | 53.014 | 0 | `results/runs/mcp_iter_cheap_job_v1/queries.jsonl` |
 | `mcp_iter_hybrid_job_v1` | JOB (113) | `mcp_iter_hybrid` (K≤5, Hybrid) | `6f98ee9` | **DONE** | 183.38 | 1,796.20 | 69.539 | 0 | `results/runs/mcp_iter_hybrid_job_v1/queries.jsonl` |
+| `v2_120b_job_top12` | JOB Top-12 (`v2`) | `v2_120b` (K=20 fixed, 120B) | `1eb9ba2` | **DONE** | 1,263.15 | 2,072.88 | 15.010 | 0 | `results/runs/v2_120b_job_top12/queries.jsonl` |
+| `v2_550b_job_top12` | JOB Top-12 (`v2`) | `v2_550b` (K=20 fixed, 550B) | `097c4d9` | **DONE** | 1,152.30 | 2,905.70 | 18.550 | 0 | `results/runs/v2_550b_job_top12/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
@@ -123,7 +125,20 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 
 ---
 
-## 7. Git Commit Log
+## 7. Phase 2 (`v2`) Methodology — Fixed-`K` Pareto & Anti-Contamination (`measurement_contract_v2.yaml`)
+
+- **Fast Async Engine (`scripts/v2/run_v2.py`):** 4-way `AsyncOpenAI` concurrency across queries with a strict `asyncio.Lock` around every PostgreSQL `EXPLAIN ANALYZE` / Phase-2 real index build (verified zero DB contention in `tests/speeduptest/bench_e2e.py`, 3.2× faster wall-clock time), `get_table_stats` pre-fetched once at Round 0 (-20% tokens), unbounded thinking (apples-to-apples with `v1`), and per-query exact-action deduplication cache to force genuine exploration across `K = 20` fixed rounds.
+- **3-Way Model Comparison on Slowest `v1` Queries (`K = 20` fixed, no early stopping):**
+  1. `v2_120b` (`nemotron-3.5-super-vl-120b-a12b`)
+  2. `v2_550b` (`nemotron-3-ultra-550b-a55b`)
+  3. `v2_hybrid` — **Alternating round-robin multi-model ensemble** (`odd rounds = 120B`, `even rounds = 550B`), sharing full `Previous Rounds History` and `Last Evaluated Plan` (updated pre-run in `c13b67f` after `v2_120b` `-68.4%` outperformed `v2_550b` `-62.7%` overall while exhibiting complementary per-query wins).
+- **Anti-Contamination Validation (at solved Pareto-optimal `K*`):**
+  1. **`imdb_anon`:** Schema-anonymized opaque-view mirror (`t01..t21`, `c01..cN`) of `job_top12` — zero IMDb identifiers, identical data skew and cardinality errors.
+  2. **`stats_ceb`:** Real-world **STATS-CEB (VLDB 2022)** benchmark (Stats StackExchange, 8 tables) — non-IMDb/non-TPC-H real-world generalization test.
+
+---
+
+## 8. Git Commit Log
 
 - `e0014c5` — Initial project scaffold, PostgreSQL 16 Docker setup, and draft measurement contract.
 - `75ee861` — JOB & TPC-H SF=10 loaders, extended `postgres-mcp` server, Gemini advisory loop, and baselines.
