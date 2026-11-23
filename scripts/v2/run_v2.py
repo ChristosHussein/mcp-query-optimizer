@@ -169,12 +169,18 @@ async def optimize_one_query(
     # Round 0: Strictly serialized warm-up + baseline EXPLAIN ANALYZE
     base_plan = ""
     async with db_lock:
-        for _ in range(2):
-            res = await session.call_tool("explain_query", arguments={"sql": sql, "analyze": True})
-            txt = "\n".join(c.text for c in res.content if getattr(c, "type", None) == "text")
-            base_plan = txt
-            if txt.startswith("Error:"):
+        for attempt in range(2):
+            base_plan = ""
+            for _ in range(2):
+                res = await session.call_tool("explain_query", arguments={"sql": sql, "analyze": True})
+                txt = "\n".join(c.text for c in res.content if getattr(c, "type", None) == "text")
+                base_plan = txt
+                if txt.startswith("Error:") or parse_execution_time_ms(txt) is None:
+                    break
+            low = base_plan.lower()
+            if parse_execution_time_ms(base_plan) is not None or any(k in low for k in ("timeout", "canceling", "timed out")):
                 break
+            await asyncio.sleep(1.0)
 
     base_timed_out = False
     parsed_base_ms = parse_execution_time_ms(base_plan)
@@ -230,7 +236,7 @@ async def optimize_one_query(
         async with file_lock:
             out_fh.write(json.dumps(records[0]) + "\n")
             out_fh.flush()
-        print(f"  [ERR] {qid} baseline failed.")
+        print(f"  [ERR] {qid} baseline failed: {base_plan[:300]}")
         return
 
     best_ms = base_ms
