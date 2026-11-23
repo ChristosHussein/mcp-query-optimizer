@@ -15,10 +15,9 @@ execution_engine:
   early_stopping: "DISABLED (all K=20 rounds executed on every query; repeated identical proposals served from per-query cache to force exploration)"
   statement_timeout_ms: 180000
 
-hybrid_escalation_rule:
-  derived_from: "v1 pg_default empirical median within-run spread (JOB=7.92%, TPC-H=6.12%) + 10 percentage-point margin"
-  threshold_pct: 18.0
-  rule: "Rounds 1-2 use 120B Worker; Rounds 3-20 escalate to 550B Frontier Advisor if best latency reduction over Round-0 baseline is < 18.0%"
+hybrid_routing_rule:
+  note: "Updated PRE_HYBRID_RUN after v2_120b (-68.4%) outperformed v2_550b (-62.7%) overall while showing complementary per-query wins"
+  rule: "Alternating round-robin ensemble: odd rounds (R1, R3, ..., R19) use 120B Worker; even rounds (R2, R4, ..., R20) use 550B Frontier Advisor, sharing full execution history"
 
 methods:
   - id: "v2_120b"
@@ -32,7 +31,7 @@ methods:
   - id: "v2_hybrid"
     model_worker: "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"
     model_advisor: "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
-    description: "Fixed K=20 rounds: 120B on R1-R2, escalating to 550B on R3-R20 if latency gain < 18%"
+    description: "Fixed K=20 alternating round-robin ensemble (odd rounds 120B Worker, even rounds 550B Frontier)"
 
 benchmarks:
   job_top12:

@@ -251,12 +251,8 @@ async def optimize_one_query(
         elif args.method == "v2_120b":
             model = args.worker_model
         else:
-            # v2_hybrid: R1-R2 Worker, R3+ escalate to 550B if gain < escalation_pct (default 18%)
-            if r <= 2:
-                model = args.worker_model
-            else:
-                gain_pct = ((base_ms - best_ms) / base_ms * 100.0) if base_ms > 0 else 0.0
-                model = args.advisor_model if gain_pct < args.escalation_pct else args.worker_model
+            # v2_hybrid: Alternating round-robin (odd rounds = 120B Worker, even rounds = 550B Frontier)
+            model = args.worker_model if (r % 2 == 1) else args.advisor_model
 
         hist_block = "\n".join(history) if history else "(none yet — Round 1)"
         last_block = f"\n### Last Evaluated Plan\n```\n{last_plan}\n```\n" if last_plan else ""
