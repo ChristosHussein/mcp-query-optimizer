@@ -124,6 +124,9 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `v2_120b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_120b` (120B) | `8cfe628` | **DONE** | 2,761.60 | 4,947.00 | 35.210 | 0 | `results/runs/v2_120b_imdb_anon_k6/queries.jsonl` |
 | `v2_550b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_550b` (550B) | `4da93c1` | **DONE** | 1,510.90 | 5,616.10 | 29.280 | 0 | `results/runs/v2_550b_imdb_anon_k6/queries.jsonl` |
 | `v2_hybrid_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating 120B↔550B) | `45401ab` | **DONE** | 1,358.10 | 2,896.25 | 21.300 | 0 | `results/runs/v2_hybrid_imdb_anon_k6/queries.jsonl` |
+| `v2_120b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_120b` (120B, 60s cap) | `4756f04` | **DONE** | 28,701.70 | 60,000.00 | 407.880 | 4 | `results/runs/v2_120b_stats_ceb_k6/queries.jsonl` |
+| `v2_550b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_550b` (550B, 60s cap) | `6f453b2` | **DONE** | 23,068.35 | 60,000.00 | 399.170 | 4 | `results/runs/v2_550b_stats_ceb_k6/queries.jsonl` |
+| `v2_hybrid_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating, 60s cap) | `d9e2290` | **DONE** | 25,617.25 | 60,000.00 | 409.850 | 4 | `results/runs/v2_hybrid_stats_ceb_k6/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
