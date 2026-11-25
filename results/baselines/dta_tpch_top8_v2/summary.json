@@ -1,0 +1,14 @@
+{
+  "run_id": "dta_tpch_top8_v2",
+  "benchmark": "tpch",
+  "method_id": "dta_baseline",
+  "query_count": 8,
+  "base_total_s": 425.14,
+  "best_total_s": 45.731,
+  "reduction_pct": 89.24,
+  "speedup_x": 9.3,
+  "p50_ms": 5073.08,
+  "p90_ms": 10657.42,
+  "improved_count": 3,
+  "improved_pct": 37.5
+}

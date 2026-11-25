@@ -50,7 +50,7 @@ Forked from `crystaldba/postgres-mcp` (MIT) and extended with four research-spec
 
 ## 3. Experimental Protocol & Environment
 
-All experiments were governed by a pre-frozen measurement contract (`measurement_contract.yaml`, version `1.0.0`) on a single dedicated machine so every comparison shares identical hardware:
+All experiments were governed by a pre-frozen measurement contract (`contracts/measurement_contract_v1.yaml`, version `1.0.0`) on a single dedicated machine so every comparison shares identical hardware:
 
 - **Hardware & Engine:** AMD Ryzen 5 9600X (6C/12T), 31.6 GB RAM, local SSD, Windows + WSL 2 Docker running PostgreSQL 16 (`shared_buffers=4GB`, `effective_cache_size=16GB`, `work_mem=256MB`, `maintenance_work_mem=2GB`, `max_parallel_workers_per_gather=2`, `random_page_cost=1.1`).
 - **Timing Protocol:** Warm-cache execution (warm-up runs prior to timed runs to prevent cold OS-buffer bias), `statement_timeout = 180,000 ms` (3 minutes). Queries that time out are recorded as `timed_out = true` with `execution_latency_ms = 180,000.0` (and in the advisory loop, Round-0 timeouts fall back to `EXPLAIN` without `ANALYZE` so the agent can still diagnose and rescue them).

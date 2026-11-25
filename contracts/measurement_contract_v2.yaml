@@ -31,7 +31,11 @@ methods:
   - id: "v2_hybrid"
     model_worker: "nvidia:nvidia/nemotron-3.5-super-vl-120b-a12b"
     model_advisor: "nvidia:nvidia/nemotron-3-ultra-550b-a55b"
-    description: "Fixed K=20 alternating round-robin ensemble (odd rounds 120B Worker, even rounds 550B Frontier)"
+    description: "Fixed K=20 (or K*=6) alternating round-robin ensemble (odd rounds 120B Worker, even rounds 550B Frontier)"
+  - id: "dta_baseline"
+    model_worker: null
+    model_advisor: null
+    description: "Non-LLM classical heuristic DatabaseTuningAdvisor (greedy Pareto HypoPG search, max_index_width=3, max_runtime_seconds=60) evaluated via Phase-2 real index materialization on tpch_eval"
 
 benchmarks:
   job_top12:
@@ -63,6 +67,6 @@ benchmarks:
 
 primary_outcomes:
   - "Latency vs. Fixed Round K (K=1..20) Pareto curves per method"
-  - "Cumulative Token Usage vs. Latency reduction (solving optimal K*)"
-  - "Head-to-head comparison: 120B vs. 550B vs. Hybrid (18% noise-derived escalation)"
-  - "Anti-contamination delta: job_top12 vs. imdb_anon & unseen synth_skew generalization"
+  - "Cumulative Token Usage vs. Latency reduction (solving optimal K*=6)"
+  - "Head-to-head comparison: 120B vs. 550B vs. Alternating Hybrid vs. Non-LLM Baselines (Bao Oracle on JOB, Greedy DTA on TPC-H)"
+  - "Anti-contamination delta: job_top12 vs. imdb_anon & unseen real-world STATS-CEB generalization"

@@ -18,7 +18,7 @@ Phase 1 (`v1`) demonstrated that an iterative MCP-grounded advisory agent (`K �
 
 ## 2. Phase 2 (`v2`) Experimental Protocol
 
-All 12 `v2` runs were governed by `measurement_contract_v2.yaml` (`v2.0.0`) on the same dedicated PostgreSQL 16 hardware as `v1` (AMD Ryzen 5 9600X, 31.6 GB RAM, local SSD, PostgreSQL 16 in Docker with `pg_hint_plan 1.6.3` and `HypoPG 1.4.5`):
+All 12 `v2` runs were governed by `contracts/measurement_contract_v2.yaml` (`v2.0.0`) on the same dedicated PostgreSQL 16 hardware as `v1` (AMD Ryzen 5 9600X, 31.6 GB RAM, local SSD, PostgreSQL 16 in Docker with `pg_hint_plan 1.6.3` and `HypoPG 1.4.5`):
 
 - **Models (Open-Weights via NVIDIA NIM, full thinking enabled):**
   - **`v2_120b` (Super):** `nvidia/nemotron-3.5-super-vl-120b-a12b`
@@ -44,9 +44,10 @@ All metrics below are reconstructed directly from the frozen `results/runs/<run_
 | **JOB Top-12** | `K=20` | `v2_120b` | 47.46 | 15.01 | -68.4% | 3.16× | 1,263.1 | 2,072.9 | 12/12 | 0→0 | 528,267 | 7.73k | 195.4k |
 | **JOB Top-12** | `K=20` | `v2_550b` | 49.76 | 18.55 | -62.7% | 2.68× | 1,121.4 | 2,905.8 | 11/12 | 0→0 | 506,640 | 8.08k | 194.8k |
 | **JOB Top-12** | `K=20` | **`v2_hybrid`** | **46.13** | **14.04** | **-69.6%** | **3.29×** | **1,093.1** | **2,017.0** | **12/12** | **0→0** | 545,166 | 7.84k | 203.9k |
-| **JOB Top-12** | `K*=6` | **`v2_120b`** | **47.46** | **16.26** | **-65.7%** | **2.92×** | **1,300.9** | **2,079.4** | **12/12** | **0→0** | **135,782** | **2.07k** | **52.2k** |
-| **JOB Top-12** | `K*=6` | `v2_550b` | 49.76 | 29.44 | -40.8% | 1.69× | 1,942.3 | 5,235.7 | 8/12 | 0→0 | 110,540 | 2.71k | 65.3k |
+| **JOB Top-12** | `K*=6` | **`v2_120b`** | **47.46** | **16.26** | **-65.7%** | **2.92×** | **1,301.0** | **2,079.4** | **12/12** | **0→0** | **135,782** | **2.07k** | **52.2k** |
+| **JOB Top-12** | `K*=6` | `v2_550b` | 49.76 | 29.44 | -40.8% | 1.69× | 1,942.3 | 5,235.8 | 8/12 | 0→0 | 110,540 | 2.71k | 65.3k |
 | **JOB Top-12** | `K*=6` | `v2_hybrid` | 46.13 | 19.11 | -58.6% | 2.41× | 1,212.0 | 2,828.4 | 12/12 | 0→0 | 131,140 | 2.24k | 58.2k |
+| **TPC-H Top-8** | `0` | `dta_baseline` (Non-LLM) | 425.14 | 45.73 | -89.2% | 9.30× | 5,073.1 | 10,657.4 | 3/8 | 2→0 | 0 | — | — |
 | **TPC-H Top-8** | `K*=6` | `v2_120b` | 442.47 | 49.84 | -88.7% | 8.88× | 5,199.4 | 12,311.5 | 6/8 | 2→0 | 107,691 | 1.21k | 2.2k |
 | **TPC-H Top-8** | `K*=6` | `v2_550b` | 451.37 | 46.94 | -89.6% | 9.62× | 4,686.9 | 12,248.1 | 6/8 | 2→0 | 86,207 | **0.96k** | **1.7k** |
 | **TPC-H Top-8** | `K*=6` | **`v2_hybrid`** | **450.97** | **43.11** | **-90.4%** | **10.46×** | **4,332.7** | **11,966.4** | **7/8** | **2→0** | 107,440 | 1.19k | 2.1k |
@@ -86,9 +87,9 @@ Running a fixed 20-round budget on `JOB Top-12` without early stopping maps the 
 | **`K=20`** | **15.01** | **-68.4%** | **528,267** | **7.73k** | **18.55** | **-62.7%** | **506,640** | **8.08k** | **14.04** | **-69.6%** | **545,166** | **7.84k** |
 
 **Why `K* = 6` is the Pareto-Optimal Operating Point:**
-- **Diminishing returns after `K = 6`:** For `v2_120b`, `K = 6` already captures **96.1%** of its full 20-round latency reduction (`-65.7%` vs. `-68.4%`) while using only **25.7%** of the tokens (`135.8k` vs. `528.3k` tok/q). Extending from `K = 6` to `K = 20` quadruples token cost per 1% reduction (`2.07k → 7.73k tok / 1%`) for just `1.25 s` of extra speedup.
+- **Diminishing returns after `K = 6`:** For `v2_120b`, `K = 6` already captures **96.2%** of its full 20-round latency reduction (`-65.7%` vs. `-68.4%`) while using only **25.7%** of the tokens (`135.8k` vs. `528.3k` tok/q). Extending from `K = 6` to `K = 20` quadruples token cost per 1% reduction (`2.07k → 7.73k tok / 1%`) for just `1.25 s` of extra speedup.
 - **Even-round balance for Hybrid:** `K* = 6` gives the Alternating Hybrid exactly 3 turns for `120B` and 3 turns for `550B`, capturing **84.2%** of its 20-round gain (`-58.6%` vs. `-69.6%`) at **24.1%** of the token cost (`2.24k` vs. `7.84k tok / 1%`).
-- **Late-round discovery ceiling:** Running to `K = 20` remains valuable for offline/batch optimization of ultra-expensive recurring analytical queries — `v2_hybrid` discovered additional plan breakthroughs on `19d`, `17f`, and `31a` between Rounds 16–20, pushing total latency down to `14.04 s` (`3.29×`, beating `bao_oracle`'s `24.87 s` by `-43.5%`).
+- **Late-round discovery ceiling:** Running to `K = 20` remains valuable for offline/batch optimization of ultra-expensive recurring analytical queries — `v2_hybrid` discovered additional plan breakthroughs on `19d`, `17f`, and `31a` between Rounds 16–20, pushing total latency down to `14.04 s` (`3.29×`, beating `bao_oracle`'s `24.87 s` by `-43.6%`).
 
 ---
 
@@ -100,8 +101,8 @@ Across the four `v2` benchmarks, **Alternating Hybrid won 3 of 4** (`JOB Top-12`
    - Standalone `v2_550b` failed to find any valid improvement on `19d` across all 20 rounds (`6,437.8 ms → 6,437.8 ms`, `1.00×`).
    - Standalone `v2_120b` found a solid plan early (`5,844.8 ms → 3,424.8 ms`, `1.71×`) but plateaued at Round 2.
    - Inside `v2_hybrid`, `120B` established a working join structure first, and `550B` inspected that live `EXPLAIN ANALYZE` feedback to refine the join order all the way down to **`2,043.6 ms` (`2.52×`)** — beating both standalone models *and* `bao_oracle` (`2,421.0 ms`).
-2. **TPC-H Top-8 (`10.46×` Speedup, `43.11 s` Total):**
-   - All three models eliminated both `180 s` timeouts (`q17`: `~16.5 ms`, ~10,900×; `q20`: `322–354 ms`, ~530×), but `v2_hybrid` discovered stronger composite indexes on `q09` (`15,934.6 ms → 4,477.4 ms`, `3.56×`) and `q18` (`26,938.0 ms → 7,602.7 ms`, `3.54×`), achieving `7/8` improved queries and the lowest total latency (`43.11 s` vs. `46.94 s` for `550B` and `49.84 s` for `120B`).
+2. **TPC-H Top-8 (`10.46×` Speedup, `43.11 s` Total — Beating Non-LLM Greedy `DTA`):**
+   - Classical heuristic `DatabaseTuningAdvisor` (`dta_baseline`, `0` LLM tokens) rescued `q17`/`q20` and improved `q18`, but improved only **`3/8` queries** (proposing `0` indexes on `q01`, `q09`, `q10`, `q13` and triggering a `+153.7%` unverified-`HypoPG` regression on `q03`: `2,920.1 ms → 7,407.3 ms`, caught only by our Phase-2 `tpch_eval` guard). By contrast, `v2_hybrid` discovered multi-table composite indexes on `q09` (`15,934.6 ms → 4,477.4 ms`, `3.56×`) and `q18` (`26,938.0 ms → 7,602.7 ms`, `3.54×`), achieving **`7/8` improved queries** and the lowest total latency (`43.11 s` vs. `45.73 s` guarded `DTA`, `46.94 s` `550B`, and `49.84 s` `120B`).
 
 ---
 
@@ -114,7 +115,7 @@ Across the four `v2` benchmarks, **Alternating Hybrid won 3 of 4** (`JOB Top-12`
 Stripping 100% of IMDb table names, column names, index names, and SQL aliases while keeping the exact same data distribution isolates **memorized schema priors** from **live MCP telemetry reasoning**:
 
 - **`v2_120b` (`-65.7%` → `-32.0%`, 48.7% retention):** Removing semantic names cut standalone `120B`'s speedup roughly in half, showing that smaller models rely noticeably on domain/schema semantics alongside telemetry — yet it still improved `9/12` queries (`17c`: `2,876.5 ms → 153.3 ms`, `18.76×`) purely from `pg_stats` and `EXPLAIN ANALYZE` row-misestimation markers.
-- **`v2_550b` (`-40.8%` → `-38.7%`, 94.9% retention):** The 550B model suffered almost zero degradation under complete anonymization (`10/12` queries improved, `31a`: `2,372.6 ms → 140.3 ms`, `16.91×`), demonstrating strong telemetry-driven reasoning independent of schema naming.
+- **`v2_550b` (`-40.8%` → `-38.7%`, 94.8% retention):** The 550B model suffered almost zero degradation under complete anonymization (`10/12` queries improved, `31a`: `2,372.6 ms → 140.3 ms`, `16.91×`), demonstrating strong telemetry-driven reasoning independent of schema naming.
 - **`v2_hybrid` (`-58.6%` → `-53.6%`, 91.5% retention — #1 on `imdb_anon`):** Alternating `120B ↔ 550B` recovered **91.5%** of its original IMDb `K = 6` speedup (`45.89 s → 21.30 s`, `2.15×`, `10/12` improved; `17c`: `18.13×`, `17a`: `6.41×`, `17e`: `4.10×`, `16b`: `3.19×`), proving that the majority of our MCP advisory gains come from live database feedback rather than benchmark memorization.
 
 ### 6.2 Real-World Unseen Benchmark (`STATS-CEB Top-12`, VLDB 2022, `K* = 6`, 60s Timeout)

@@ -310,9 +310,11 @@ class IndexTuningBase(ABC):
             session.error = hypopg_message
             return session
 
-        # Pre-check 2: Check if ANALYZE has been run at least once
-        result = await self.sql_driver.execute_query("SELECT s.last_analyze FROM pg_stat_user_tables s ORDER BY s.last_analyze LIMIT 1;")
-        if not result or not any(row.cells.get("last_analyze") is not None for row in result):
+        # Pre-check 2: Check if optimizer statistics exist in pg_stats (or last_analyze / last_autoanalyze)
+        result = await self.sql_driver.execute_query(
+            "SELECT 1 AS ok FROM pg_stats WHERE schemaname NOT IN ('pg_catalog', 'information_schema') LIMIT 1;"
+        )
+        if not result:
             error_message = (
                 "Statistics are not up-to-date. The database needs to be analyzed first. "
                 "Please run 'ANALYZE;' on your database before using the tuning advisor. "

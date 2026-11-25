@@ -8,6 +8,11 @@ from dataclasses import dataclass
 from dataclasses import field
 from typing import Any
 
+import pglast
+from pglast.ast import IndexStmt
+from pglast.ast import SubLink
+from pglast.parser import ParseError
+from pglast.visitors import Visitor
 from psycopg.rows import dict_row
 
 from ..artifacts import ExplainPlanArtifact
@@ -39,8 +44,79 @@ class HintReport:
         }
 
 
+_POS_SCAN_HINTS = {"seqscan", "indexscan", "indexonlyscan", "bitmapscan", "tidscan"}
+_NEG_SCAN_HINTS = {"noseqscan", "noindexscan", "noindexonlyscan", "nobitmapscan", "notidscan"}
+_POS_JOIN_HINTS = {"hashjoin", "mergejoin", "nestloop"}
+_NEG_JOIN_HINTS = {"nohashjoin", "nomergejoin", "nonestloop"}
+
+
+def _binarize_leading_body(body: str) -> str:
+    """Convert nested Leading(...) bodies like '(a b) c d' into pg_hint_plan binary trees '(((a b) c) d)'."""
+    if "(" not in body:
+        return body.strip()
+    tokens = re.findall(r"\(|\)|[^\s()]+", body)
+    stack: list[list[Any]] = [[]]
+    for tok in tokens:
+        if tok == "(":
+            sub: list[Any] = []
+            stack[-1].append(sub)
+            stack.append(sub)
+        elif tok == ")":
+            if len(stack) == 1:
+                return body.strip()
+            stack.pop()
+        else:
+            stack[-1].append(tok)
+    if len(stack) != 1 or not stack[0]:
+        return body.strip()
+
+    def _fold(node: Any) -> str:
+        if isinstance(node, str):
+            return node
+        items = [s for s in (_fold(x) for x in node) if s]
+        if not items:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        acc = f"({items[0]} {items[1]})"
+        for nxt in items[2:]:
+            acc = f"({acc} {nxt})"
+        return acc
+
+    folded = _fold(stack[0])
+    return folded if folded.startswith("(") else f"({folded})"
+
+
+def _split_hint_directives(inner: str) -> list[tuple[str, str]] | None:
+    """Parse 'Name(body) Name2(body2)' into [(Name, body), ...] when parentheses are balanced."""
+    directives: list[tuple[str, str]] = []
+    i, n = 0, len(inner)
+    while i < n:
+        while i < n and inner[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        m = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(", inner[i:])
+        if not m:
+            return None
+        name = m.group(1)
+        i += m.end()
+        start = i
+        depth = 1
+        while i < n and depth > 0:
+            if inner[i] == "(":
+                depth += 1
+            elif inner[i] == ")":
+                depth -= 1
+            i += 1
+        if depth != 0:
+            return None
+        directives.append((name, inner[start : i - 1].strip()))
+    return directives
+
+
 def normalize_hint_block(hints: str) -> str:
-    """Normalize a pg_hint_plan comment block and reject comment breakout / SQL smuggling."""
+    """Normalize a pg_hint_plan comment block, binarize nested Leading(...), drop redundant negations, and block injection."""
     text = hints.strip()
     if not text:
         raise ValueError("Hints string must not be empty.")
@@ -54,6 +130,31 @@ def normalize_hint_block(hints: str) -> str:
         raise ValueError("Hint block contains no directives.")
     if "*/" in inner or "/*" in inner or ";" in inner:
         raise ValueError("Invalid characters ('/*', '*/', or ';') inside hint block.")
+
+    parsed = _split_hint_directives(inner)
+    if parsed:
+        pos_scans = {
+            body.split()[0].lower()
+            for name, body in parsed
+            if name.lower() in _POS_SCAN_HINTS and len(body.split()) == 1
+        }
+        pos_joins = {
+            frozenset(t.lower() for t in body.split())
+            for name, body in parsed
+            if name.lower() in _POS_JOIN_HINTS and "(" not in body and len(body.split()) >= 2
+        }
+        cleaned: list[str] = []
+        for name, body in parsed:
+            low = name.lower()
+            if low == "leading":
+                body = _binarize_leading_body(body)
+            elif low in _NEG_SCAN_HINTS and len(body.split()) == 1 and body.split()[0].lower() in pos_scans:
+                continue
+            elif low in _NEG_JOIN_HINTS and "(" not in body and frozenset(t.lower() for t in body.split()) in pos_joins:
+                continue
+            cleaned.append(f"{name}({body})")
+        if cleaned:
+            inner = " ".join(cleaned)
 
     return f"/*+ {inner} */"
 
@@ -190,7 +291,7 @@ async def get_table_stats(
     if not tables:
         raise ValueError("Provide at least one table name.")
 
-    clean_tables = [t.strip() for t in tables if t.strip()]
+    clean_tables = [t.strip().lower() for t in tables if t.strip()]
     async_pool = await pool.pool_connect()
     async with async_pool.connection() as conn:
         async with conn.cursor(row_factory=dict_row) as cur:
@@ -283,6 +384,65 @@ _IDENT_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _ALLOWED_USING = {"btree", "hash", "gin", "gist", "brin"}
 
 
+class _SubqueryBlocker(Visitor):
+    def __init__(self) -> None:
+        self.has_sublink = False
+
+    def visit_SubLink(self, ancestors: Any, node: SubLink) -> None:
+        self.has_sublink = True
+
+
+def format_and_validate_index_ddl(
+    idx_name: str,
+    table: str,
+    columns: list[str],
+    using: str = "btree",
+    where: str | None = None,
+) -> str:
+    """Build and AST-validate a CREATE INDEX statement (supports plain columns, immutable expressions, and partial WHERE)."""
+    tbl = table.strip()
+    method = using.strip().lower()
+    if not _IDENT_RE.match(tbl):
+        raise ValueError(f"Invalid table identifier: {table}")
+    if not _IDENT_RE.match(idx_name):
+        raise ValueError(f"Invalid index name: {idx_name}")
+    if method not in _ALLOWED_USING:
+        raise ValueError(f"Unsupported index method: {using}")
+    if not columns:
+        raise ValueError("Index must specify at least one column or expression.")
+
+    formatted_cols: list[str] = []
+    for raw_col in columns:
+        col = str(raw_col).strip()
+        if not col:
+            raise ValueError("Empty column/expression in index definition.")
+        if _IDENT_RE.match(col):
+            formatted_cols.append(col)
+        else:
+            wrapped = col if (col.startswith("(") and col.endswith(")")) else f"({col})"
+            formatted_cols.append(wrapped)
+
+    where_sql = f" WHERE {where.strip()}" if (where and str(where).strip()) else ""
+    ddl = f"CREATE INDEX {idx_name} ON {tbl} USING {method} ({', '.join(formatted_cols)}){where_sql}"
+
+    try:
+        stmts = pglast.parse_sql(ddl)
+    except ParseError as exc:
+        raise ValueError(f"Invalid index expression/predicate syntax: {exc}") from exc
+
+    if len(stmts) != 1 or not isinstance(stmts[0].stmt, IndexStmt):
+        raise ValueError("Index DDL failed single-statement IndexStmt AST check.")
+    stmt: IndexStmt = stmts[0].stmt
+    if stmt.relation.relname != tbl or stmt.relation.schemaname is not None:
+        raise ValueError("Unexpected relation target in parsed IndexStmt.")
+    sub_check = _SubqueryBlocker()
+    sub_check(stmt)
+    if sub_check.has_sublink:
+        raise ValueError("Subqueries are not permitted inside index expressions or predicates.")
+
+    return ddl
+
+
 async def evaluate_real_indexes(
     eval_pool: DbConnPool,
     sql: str,
@@ -316,17 +476,11 @@ async def evaluate_real_indexes(
                     table = str(idx["table"]).strip()
                     cols = [str(c).strip() for c in idx["columns"]]
                     using = str(idx.get("using", "btree")).strip().lower()
-                    if not _IDENT_RE.match(table):
-                        raise ValueError(f"Invalid table identifier: {table}")
-                    if not cols or not all(_IDENT_RE.match(c) for c in cols):
-                        raise ValueError(f"Invalid column identifiers: {cols}")
-                    if using not in _ALLOWED_USING:
-                        raise ValueError(f"Unsupported index method: {using}")
-
+                    where = idx.get("where")
                     idx_name = f"tmp_adv_idx_{int(time.time() * 1000)}_{i}"
-                    cols_sql = ", ".join(cols)
+                    ddl = format_and_validate_index_ddl(idx_name, table, cols, using=using, where=where)
                     t0 = time.perf_counter()
-                    await cur.execute(f"CREATE INDEX {idx_name} ON {table} USING {using} ({cols_sql})")
+                    await cur.execute(ddl)
                     build_times_ms.append(round((time.perf_counter() - t0) * 1000, 2))
                     created_names.append(idx_name)
                     touched_tables.add(table)

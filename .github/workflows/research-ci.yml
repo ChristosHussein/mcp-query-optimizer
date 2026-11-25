@@ -1,0 +1,46 @@
+name: Research Reproducibility & Report Integrity CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-evidence-and-reports:
+    name: Verify Evidence Hashes, Unit Checks & Report Tables
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --frozen --python 3.12
+
+      - name: Run MCP advisory unit & AST security checks
+        run: uv run python tests/test_mcp_advisory.py --unit-only
+
+      - name: Verify frozen evidence SHA-256 hashes & cross-surface report bindings
+        run: uv run python scripts/verify_ci_gate.py --record ci_provenance_record.json
+
+      - name: Upload non-sensitive provenance record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: research-ci-provenance
+          path: ci_provenance_record.json
+          if-no-files-found: error
+          retention-days: 30

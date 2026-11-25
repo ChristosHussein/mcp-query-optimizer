@@ -18,6 +18,7 @@ from mcp.client.stdio import stdio_client
 
 from postgres_mcp.advisory import evaluate_real_indexes
 from postgres_mcp.advisory import explain_with_hints
+from postgres_mcp.advisory import format_and_validate_index_ddl
 from postgres_mcp.advisory import get_table_stats
 from postgres_mcp.advisory import normalize_hint_block
 from postgres_mcp.advisory import parse_hint_notices
@@ -31,6 +32,28 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_unit_helpers() -> None:
     assert normalize_hint_block("HashJoin(ci t)") == "/*+ HashJoin(ci t) */"
     assert normalize_hint_block("/*+ SeqScan(t) */") == "/*+ SeqScan(t) */"
+    # Nested Leading(...) auto-binarization & redundant negative hint deduplication
+    assert normalize_hint_block("Leading((cn mc) t ci) HashJoin(cn mc) NoNestLoop(mc cn) SeqScan(t) NoIndexScan(t)") == (
+        "/*+ Leading((((cn mc) t) ci)) HashJoin(cn mc) SeqScan(t) */"
+    )
+    assert normalize_hint_block("Leading(((a b) c))") == "/*+ Leading(((a b) c)) */"
+    assert normalize_hint_block("Leading(a b c d)") == "/*+ Leading(a b c d) */"
+
+    # pglast AST validation for plain, functional (TPC-H q22 substring), and partial indexes
+    ddl_expr = format_and_validate_index_ddl(
+        "tmp_idx_0", "customer", ["substring(c_phone FROM 1 FOR 2)", "c_acctbal"], using="btree", where="c_acctbal > 0"
+    )
+    assert "((substring(c_phone FROM 1 FOR 2)), c_acctbal) WHERE c_acctbal > 0" in ddl_expr
+    for bad_idx in [
+        ("customer", ["c_acctbal); DROP TABLE customer; --"], None),
+        ("customer", ["(SELECT max(c_acctbal) FROM customer)"], None),
+        ("customer; DROP TABLE x", ["c_acctbal"], None),
+    ]:
+        try:
+            format_and_validate_index_ddl("tmp_idx_bad", bad_idx[0], bad_idx[1], where=bad_idx[2])
+            raise AssertionError(f"Expected ValueError for malicious/invalid index: {bad_idx!r}")
+        except ValueError:
+            pass
 
     for bad in ["", "/*+ */", "SeqScan(t) */ DROP TABLE t; /*+", "SeqScan(t); SELECT 1"]:
         try:
@@ -87,6 +110,17 @@ async def test_live_imdb_tools() -> None:
         assert res_ok["execution_time_ms"] is not None and res_ok["execution_time_ms"] > 0
         assert " AS " in res_ok["plan_text"], "Expected table aliases in plan_text"
         print(f"[PASS] explain_with_hints (valid) on JOB 1a -> {res_ok['execution_time_ms']:.2f} ms")
+
+        # 2b. Verify previously failing LLM syntax 'Leading((ct mc) t it mi_idx) SeqScan(ct) NoIndexScan(ct)' normalizes & runs with 0 warnings
+        res_norm = await explain_with_hints(
+            imdb_pool,
+            job_1a,
+            "Leading((ct mc) t it mi_idx) SeqScan(ct) NoIndexScan(ct)",
+            analyze=False,
+        )
+        assert not res_norm["hint_report"]["warnings"], f"Expected 0 warnings after normalization, got: {res_norm['hint_report']}"
+        assert any("Leading" in u for u in res_norm["hint_report"]["used"]), f"Expected Leading used: {res_norm['hint_report']}"
+        print("[PASS] explain_with_hints normalizes nested Leading((a b) c) & conflict hints with 0 warnings")
 
         # 3. explain_with_hints (invalid hint caught via warning/not_used)
         res_bad = await explain_with_hints(
@@ -145,7 +179,17 @@ async def test_live_imdb_tools() -> None:
         # Confirm index was cleanly dropped afterwards
         stats_after = await get_table_stats(eval_pool, ["supplier"])
         assert not any("tmp_adv_idx_" in idx["name"] for idx in stats_after["tables"]["supplier"]["indexes"])
-        print(f"[PASS] Phase-2 evaluate_real_indexes on tpch_eval ({p2['median_execution_ms']:.2f} ms, index dropped cleanly)")
+        # Functional + partial index test (TPC-H q22 pattern: substring(s_phone FROM 1 FOR 2))
+        p2_expr = await evaluate_real_indexes(
+            eval_pool,
+            "SELECT count(*) FROM supplier WHERE substring(s_phone FROM 1 FOR 2) = '13' AND s_acctbal > 0",
+            [{"table": "supplier", "columns": ["substring(s_phone FROM 1 FOR 2)", "s_acctbal"], "using": "btree", "where": "s_acctbal > 0"}],
+            warmup_runs=1,
+            timed_runs=1,
+        )
+        assert p2_expr["median_execution_ms"] > 0
+        assert "tmp_adv_idx_" in p2_expr["plan_text"]
+        print(f"[PASS] Phase-2 evaluate_real_indexes (plain + functional/partial) on tpch_eval ({p2['median_execution_ms']:.2f} ms, dropped cleanly)")
     finally:
         await eval_pool.close()
 

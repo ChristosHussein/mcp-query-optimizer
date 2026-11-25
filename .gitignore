@@ -10,18 +10,19 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Local-only thesis defense study guides & scientific integrity files (never uploaded to GitHub)
-docs/defense/
-docs/integrity/
+# Local-only files (defense guides, integrity maps, PDF references, timeline — never uploaded to GitHub)
+docs/
+References/
+*Timeline*.pdf
 
 # Large benchmark datasets & database files (download/generate via scripts)
 data/
 pgdata/
 results/cache/
-results/runs/_smoke*/
-results/runs/speeduptest*/
+results/runs/
 *.tbl
 *.csv
+!for advisor/**/*.csv
 *.dump
 *.tar.gz
 *.tgz
@@ -33,3 +34,4 @@ Thumbs.db
 ~$*.xlsx
 .vscode/
 .idea/
+ci_provenance_record.json

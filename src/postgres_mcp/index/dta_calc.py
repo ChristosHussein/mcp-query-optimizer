@@ -134,11 +134,19 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 for c in cols:
                     table_columns_usage[tbl][c] = table_columns_usage[tbl].get(c, 0) + 1
 
-        # Filter out rarely used columns
-        # e.g. skip columns that appear in fewer than self.min_column_usage queries
+        # Fetch actual catalog columns so unqualified multi-table SQL columns or CTE aliases never get paired with the wrong table
+        cat_rows = await self.sql_driver.execute_query(
+            "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public';"
+        )
+        valid_table_cols: dict[str, set[str]] = {}
+        for r in cat_rows or []:
+            valid_table_cols.setdefault(str(r.cells["table_name"]).lower(), set()).add(str(r.cells["column_name"]).lower())
+
+        # Filter out rarely used columns and columns that do not belong to the target table
         table_columns: dict[str, set[str]] = {}
         for tbl, usage_map in table_columns_usage.items():
-            kept_cols = {c for c, usage in usage_map.items() if usage >= self.min_column_usage}
+            real_cols = valid_table_cols.get(tbl.lower(), set())
+            kept_cols = {c for c, usage in usage_map.items() if usage >= self.min_column_usage and c.lower() in real_cols}
             if kept_cols:
                 table_columns[tbl] = kept_cols
 

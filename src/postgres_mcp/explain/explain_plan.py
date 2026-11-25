@@ -112,15 +112,20 @@ class ExplainPlanTool:
                     except Exception as e:
                         return ErrorResult(f"Expected list for 'columns', got {type(idx['columns'])}: {e}")
 
-            # Convert the index definitions to IndexConfig objects
-            indexes = frozenset(
-                IndexDefinition(
-                    table=idx["table"],
-                    columns=tuple(idx["columns"]),
-                    using=idx.get("using", "btree"),
+            # Convert the index definitions to IndexConfig objects (AST-validated against injection/subqueries)
+            from ..advisory.advisor_tools import format_and_validate_index_ddl
+
+            validated: list[IndexDefinition] = []
+            for idx in hypothetical_indexes:
+                defn = IndexDefinition(
+                    table=str(idx["table"]).strip(),
+                    columns=tuple(str(c).strip() for c in idx["columns"]),
+                    using=str(idx.get("using", "btree")).strip().lower(),
+                    where=idx.get("where"),
                 )
-                for idx in hypothetical_indexes
-            )
+                format_and_validate_index_ddl(defn.name, defn.table, list(defn.columns), using=defn.using, where=defn.where)
+                validated.append(defn)
+            indexes = frozenset(validated)
 
             # Check if the query contains bind variables
             modified_sql_query, use_generic_plan = await self.replace_query_parameters_if_needed(sql_query)

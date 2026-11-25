@@ -1,5 +1,8 @@
+import re
 from dataclasses import dataclass
 from typing import Any
+
+_PLAIN_IDENT = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
 @dataclass(frozen=True)
@@ -9,18 +12,27 @@ class IndexDefinition:
     table: str
     columns: tuple[str, ...]
     using: str = "btree"
+    where: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "table": self.table,
             "columns": list(self.columns),
             "using": self.using,
             "definition": self.definition,
         }
+        if self.where:
+            out["where"] = self.where
+        return out
 
     @property
     def definition(self) -> str:
-        return f"CREATE INDEX {self.name} ON {self.table} USING {self.using} ({', '.join(self.columns)})"
+        formatted = [
+            c if _PLAIN_IDENT.match(c.strip()) or (c.strip().startswith("(") and c.strip().endswith(")")) else f"({c.strip()})"
+            for c in self.columns
+        ]
+        where_sql = f" WHERE {self.where.strip()}" if (self.where and self.where.strip()) else ""
+        return f"CREATE INDEX {self.name} ON {self.table} USING {self.using} ({', '.join(formatted)}){where_sql}"
 
     @property
     def name(self) -> str:
@@ -29,16 +41,8 @@ class IndexDefinition:
         # functional expressions
         cleaned_columns = []
         for col in self.columns:
-            # Replace parentheses and other special characters with underscores
-            # This ensures expressions like LOWER(column_name) work in
-            # index names
-            cleaned_col = col.replace("(", "_").replace(")", "_").replace(" ", "_").replace(",", "_")
-            # Remove consecutive underscores
-            while "__" in cleaned_col:
-                cleaned_col = cleaned_col.replace("__", "_")
-            # Remove trailing underscores
-            cleaned_col = cleaned_col.rstrip("_")
-            cleaned_columns.append(cleaned_col)
+            cleaned_col = re.sub(r"[^a-zA-Z0-9_]+", "_", col).strip("_")
+            cleaned_columns.append(cleaned_col or "expr")
 
         column_part = "_".join(cleaned_columns)
         suffix = "" if self.using == "btree" else f"_{self.using}"

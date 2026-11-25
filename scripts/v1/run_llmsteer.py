@@ -150,7 +150,7 @@ def main() -> None:
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = args.run_id or f"llmsteer_job_{ts}"
-    out_dir = ROOT / "results" / "runs" / run_id
+    out_dir = ROOT / "results" / "baselines" / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     commit = git_commit()
 

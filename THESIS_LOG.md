@@ -2,7 +2,7 @@
 
 **Thesis Title:** MCP-Driven Query Optimization Advisory for Relational Databases (*MCP ως Σύμβουλος Βελτιστοποίησης Εκτέλεσης Ερωτημάτων σε Σχεσιακές Βάσεις Δεδομένων*)
 **Repository:** `https://github.com/ChristosHussein/mcp-query-optimizer` (private)
-**Measurement Contract:** [`measurement_contract.yaml`](measurement_contract.yaml) (`v1.0.0`, status `FROZEN_PRE_RUN` as of commit `fe61594`)
+**Measurement Contract:** [`contracts/measurement_contract_v1.yaml`](contracts/measurement_contract_v1.yaml) (`v1.0.0`, status `FROZEN_PRE_RUN` as of commit `fe61594`)
 
 > **Purpose of this file:** Chronological, chapter-ready record of every architectural decision, implementation detail, bug/methodological catch, and official experimental run so the final MSc thesis manuscript can be written directly from verified facts.
 
@@ -105,37 +105,39 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 
 | Run ID | Benchmark | Method | Git Commit | Status | P50 (ms) | P90 (ms) | Total (s) | Timeouts | Evidence Path |
 | :--- | :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| `pg_default_job_v1` | JOB (113) | `pg_default` | `fe61594` | **DONE** | 154.49 | 2,425.95 | 82.828 | 0 | `results/runs/pg_default_job_v1/queries.jsonl` |
-| `pg_default_tpch_v1` | TPC-H SF=10 (22) | `pg_default` | `5ec3d35` | **DONE** | 2,578.07 | 24,726.97 | 456.898 | 2 (`q17`, `q20`) | `results/runs/pg_default_tpch_v1/queries.jsonl` |
-| `bao_oracle_all48_job_v1` | JOB (113) | `bao_oracle` (`all48`, 49 arms) | `5de8b3c` | **DONE** | 143.14 | 1,708.84 | 52.824 | 0 | `results/runs/bao_oracle_all48_job_v1/queries.jsonl` |
-| `llmsteer_job_v1` | JOB (113) | `llmsteer_baseline` (10-fold CV) | `7fb875e` | **DONE** | 199.76 | 1,986.56 | 81.515 | 0 | `results/runs/llmsteer_job_v1/queries.jsonl` |
-| `mcp_single_shot_tpch_v1` | TPC-H SF=10 (22) | `mcp_single_shot` (K=1, Cheap) | `7fb875e` | **DONE** | 1,675.14 | 11,183.48 | 86.263 | 0 | `results/runs/mcp_single_shot_tpch_v1/queries.jsonl` |
-| `mcp_iter_cheap_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_cheap` (K≤5, Cheap) | `3f971ba` | **DONE** | 1,036.56 | 10,259.20 | 73.134 | 0 | `results/runs/mcp_iter_cheap_tpch_v1/queries.jsonl` |
-| `mcp_iter_hybrid_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_hybrid` (K≤5, Hybrid) | `f8f4745` | **DONE** | 1,055.06 | 10,950.73 | 72.923 | 0 | `results/runs/mcp_iter_hybrid_tpch_v1/queries.jsonl` |
-| `mcp_single_shot_job_v1` | JOB (113) | `mcp_single_shot` (K=1, Cheap) | `dd76bb4` | **DONE** | 145.13 | 1,523.65 | 68.624 | 0 | `results/runs/mcp_single_shot_job_v1/queries.jsonl` |
-| `mcp_iter_cheap_job_v1` | JOB (113) | `mcp_iter_cheap` (K≤5, Cheap) | `cde1fdc` | **DONE** | 131.38 | 1,310.64 | 53.014 | 0 | `results/runs/mcp_iter_cheap_job_v1/queries.jsonl` |
-| `mcp_iter_hybrid_job_v1` | JOB (113) | `mcp_iter_hybrid` (K≤5, Hybrid) | `6f98ee9` | **DONE** | 183.38 | 1,796.20 | 69.539 | 0 | `results/runs/mcp_iter_hybrid_job_v1/queries.jsonl` |
-| `v2_120b_job_top12` | JOB Top-12 (`v2`) | `v2_120b` (K=20 fixed, 120B) | `1eb9ba2` | **DONE** | 1,263.15 | 2,072.88 | 15.010 | 0 | `results/runs/v2_120b_job_top12/queries.jsonl` |
-| `v2_550b_job_top12` | JOB Top-12 (`v2`) | `v2_550b` (K=20 fixed, 550B) | `097c4d9` | **DONE** | 1,152.30 | 2,905.70 | 18.550 | 0 | `results/runs/v2_550b_job_top12/queries.jsonl` |
-| `v2_hybrid_job_top12` | JOB Top-12 (`v2`) | `v2_hybrid` (K=20 alternating 120B↔550B) | `c13b67f` | **DONE** | 1,093.10 | 2,017.03 | 14.040 | 0 | `results/runs/v2_hybrid_job_top12/queries.jsonl` |
-| `v2_120b_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_120b` (120B) | `d72560d` | **DONE** | 5,199.40 | 12,311.56 | 49.840 | 0 | `results/runs/v2_120b_tpch_top8_k6/queries.jsonl` |
-| `v2_550b_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_550b` (550B) | `ccc6468` | **DONE** | 4,686.90 | 12,248.11 | 46.940 | 0 | `results/runs/v2_550b_tpch_top8_k6/queries.jsonl` |
-| `v2_hybrid_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_hybrid` (alternating 120B↔550B) | `db9ccf2` | **DONE** | 4,332.70 | 11,966.40 | 43.110 | 0 | `results/runs/v2_hybrid_tpch_top8_k6/queries.jsonl` |
-| `v2_120b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_120b` (120B) | `8cfe628` | **DONE** | 2,761.60 | 4,947.00 | 35.210 | 0 | `results/runs/v2_120b_imdb_anon_k6/queries.jsonl` |
-| `v2_550b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_550b` (550B) | `4da93c1` | **DONE** | 1,510.90 | 5,616.10 | 29.280 | 0 | `results/runs/v2_550b_imdb_anon_k6/queries.jsonl` |
-| `v2_hybrid_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating 120B↔550B) | `45401ab` | **DONE** | 1,358.10 | 2,896.25 | 21.300 | 0 | `results/runs/v2_hybrid_imdb_anon_k6/queries.jsonl` |
-| `v2_120b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_120b` (120B, 60s cap) | `4756f04` | **DONE** | 28,701.70 | 60,000.00 | 407.880 | 4 | `results/runs/v2_120b_stats_ceb_k6/queries.jsonl` |
-| `v2_550b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_550b` (550B, 60s cap) | `6f453b2` | **DONE** | 23,068.35 | 60,000.00 | 399.170 | 4 | `results/runs/v2_550b_stats_ceb_k6/queries.jsonl` |
-| `v2_hybrid_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating, 60s cap) | `d9e2290` | **DONE** | 25,617.25 | 60,000.00 | 409.850 | 4 | `results/runs/v2_hybrid_stats_ceb_k6/queries.jsonl` |
+| `pg_default_job_v1` | JOB (113) | `pg_default` | `fe61594` | **DONE** | 154.49 | 2,425.95 | 82.828 | 0 | `results/baselines/pg_default_job_v1/queries.jsonl` |
+| `pg_default_tpch_v1` | TPC-H SF=10 (22) | `pg_default` | `5ec3d35` | **DONE** | 2,578.07 | 24,726.97 | 456.898 | 2 (`q17`, `q20`) | `results/baselines/pg_default_tpch_v1/queries.jsonl` |
+| `bao_oracle_all48_job_v1` | JOB (113) | `bao_oracle` (`all48`, 49 arms) | `5de8b3c` | **DONE** | 143.14 | 1,708.84 | 52.824 | 0 | `results/baselines/bao_oracle_all48_job_v1/queries.jsonl` |
+| `llmsteer_job_v1` | JOB (113) | `llmsteer_baseline` (10-fold CV) | `7fb875e` | **DONE** | 199.76 | 1,986.56 | 81.515 | 0 | `results/baselines/llmsteer_job_v1/queries.jsonl` |
+| `mcp_single_shot_tpch_v1` | TPC-H SF=10 (22) | `mcp_single_shot` (K=1, Cheap) | `7fb875e` | **DONE** | 1,675.14 | 11,183.48 | 86.263 | 0 | `results/v1/mcp_single_shot_tpch_v1/queries.jsonl` |
+| `mcp_iter_cheap_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_cheap` (K≤5, Cheap) | `3f971ba` | **DONE** | 1,036.56 | 10,259.20 | 73.134 | 0 | `results/v1/mcp_iter_cheap_tpch_v1/queries.jsonl` |
+| `mcp_iter_hybrid_tpch_v1` | TPC-H SF=10 (22) | `mcp_iter_hybrid` (K≤5, Hybrid) | `f8f4745` | **DONE** | 1,055.06 | 10,950.73 | 72.923 | 0 | `results/v1/mcp_iter_hybrid_tpch_v1/queries.jsonl` |
+| `mcp_single_shot_job_v1` | JOB (113) | `mcp_single_shot` (K=1, Cheap) | `dd76bb4` | **DONE** | 145.13 | 1,523.65 | 68.624 | 0 | `results/v1/mcp_single_shot_job_v1/queries.jsonl` |
+| `mcp_iter_cheap_job_v1` | JOB (113) | `mcp_iter_cheap` (K≤5, Cheap) | `cde1fdc` | **DONE** | 131.38 | 1,310.64 | 53.014 | 0 | `results/v1/mcp_iter_cheap_job_v1/queries.jsonl` |
+| `mcp_iter_hybrid_job_v1` | JOB (113) | `mcp_iter_hybrid` (K≤5, Hybrid) | `6f98ee9` | **DONE** | 183.38 | 1,796.20 | 69.539 | 0 | `results/v1/mcp_iter_hybrid_job_v1/queries.jsonl` |
+| `v2_120b_job_top12` | JOB Top-12 (`v2`) | `v2_120b` (K=20 fixed, 120B) | `1eb9ba2` | **DONE** | 1,263.14 | 2,072.92 | 15.010 | 0 | `results/v2/v2_120b_job_top12/queries.jsonl` |
+| `v2_550b_job_top12` | JOB Top-12 (`v2`) | `v2_550b` (K=20 fixed, 550B) | `097c4d9` | **DONE** | 1,121.44 | 2,905.81 | 18.551 | 0 | `results/v2/v2_550b_job_top12/queries.jsonl` |
+| `v2_hybrid_job_top12` | JOB Top-12 (`v2`) | `v2_hybrid` (K=20 alternating 120B↔550B) | `c13b67f` | **DONE** | 1,093.10 | 2,017.03 | 14.038 | 0 | `results/v2/v2_hybrid_job_top12/queries.jsonl` |
+| `dta_tpch_top8_v2` | TPC-H Top-8 (`v2`, Non-LLM) | `dta_baseline` (Greedy Pareto HypoPG) | `62c0133` | **DONE** | 5,073.08 | 10,657.42 | 45.731 | 0 | `results/baselines/dta_tpch_top8_v2/queries.jsonl` |
+| `v2_120b_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_120b` (120B) | `d72560d` | **DONE** | 5,199.39 | 12,311.54 | 49.843 | 0 | `results/v2/v2_120b_tpch_top8_k6/queries.jsonl` |
+| `v2_550b_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_550b` (550B) | `ccc6468` | **DONE** | 4,686.92 | 12,248.14 | 46.936 | 0 | `results/v2/v2_550b_tpch_top8_k6/queries.jsonl` |
+| `v2_hybrid_tpch_top8_k6` | TPC-H Top-8 (`v2`, K*=6) | `v2_hybrid` (alternating 120B↔550B) | `db9ccf2` | **DONE** | 4,332.70 | 11,966.41 | 43.108 | 0 | `results/v2/v2_hybrid_tpch_top8_k6/queries.jsonl` |
+| `v2_120b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_120b` (120B) | `8cfe628` | **DONE** | 2,760.56 | 5,068.34 | 35.208 | 0 | `results/v2/v2_120b_imdb_anon_k6/queries.jsonl` |
+| `v2_550b_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_550b` (550B) | `4da93c1` | **DONE** | 1,510.89 | 5,616.16 | 29.282 | 0 | `results/v2/v2_550b_imdb_anon_k6/queries.jsonl` |
+| `v2_hybrid_imdb_anon_k6` | `imdb_anon` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating 120B↔550B) | `45401ab` | **DONE** | 1,358.10 | 2,896.25 | 21.300 | 0 | `results/v2/v2_hybrid_imdb_anon_k6/queries.jsonl` |
+| `v2_120b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_120b` (120B, 60s cap) | `4756f04` | **DONE** | 28,701.73 | 60,000.00 | 407.884 | 4 | `results/v2/v2_120b_stats_ceb_k6/queries.jsonl` |
+| `v2_550b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_550b` (550B, 60s cap) | `6f453b2` | **DONE** | 23,068.39 | 60,000.00 | 399.166 | 4 | `results/v2/v2_550b_stats_ceb_k6/queries.jsonl` |
+| `v2_hybrid_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating, 60s cap) | `d9e2290` | **DONE** | 35,130.15 | 60,000.00 | 409.846 | 4 | `results/v2/v2_hybrid_stats_ceb_k6/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
-- **TPC-H SF=10 (`pg_default_tpch_v1`):** With PKs only, 20 queries complete in `96.90s` (notably `q18`: `26.20s`, `q13`: `11.47s`, `q01`: `11.21s`, `q09`: `9.33s`, `q10`: `6.63s`), while **`q17` and `q20` time out at `180s`** due to unindexed correlated `lineitem(l_partkey)` lookups (counted at `180,000 ms` each per `measurement_contract.yaml`, yielding `456.90s` total).
-- **Important Pre-Run Catch for Advisor:** `src/advisor/agent.py` currently returns early if Round 0 `EXPLAIN ANALYZE` times out (`base_ms is None`). Before running the TPC-H advisor, we should fall back to `EXPLAIN` (without `ANALYZE`) and set `base_ms = 180000.0` on Round-0 timeouts so the advisor can optimize `q17` and `q20`!
+- **TPC-H SF=10 (`pg_default_tpch_v1`):** With PKs only, 20 queries complete in `96.90s` (notably `q18`: `26.20s`, `q13`: `11.47s`, `q01`: `11.21s`, `q09`: `9.33s`, `q10`: `6.63s`), while **`q17` and `q20` time out at `180s`** due to unindexed correlated `lineitem(l_partkey)` lookups (counted at `180,000 ms` each per `contracts/measurement_contract_v1.yaml`, yielding `456.90s` total).
+- **Round-0 Timeout Fallback (Fixed Pre-Run in `5de8b3c`):** Updated `src/advisor/agent.py` (and `scripts/v2/run_v2.py`) so Round-0 `EXPLAIN ANALYZE` timeouts fall back to `EXPLAIN (ANALYZE FALSE)` with `base_ms = 180000.0`, enabling the advisor to inspect estimated plans and rescue both `q17` and `q20`.
+- **Non-LLM Greedy `DTA` Baseline (`dta_tpch_top8_v2`):** After fixing two upstream bugs in `crystaldba/postgres-mcp`'s `DatabaseTuningAdvisor` (`pg_stat_user_tables.last_analyze` check and unqualified `ColumnCollector` cross-table attribution), classical greedy `HypoPG` DTA improved only `3/8` queries (`q17`, `q20`, `q18`), proposed `0` indexes on `q01`, `q09`, `q10`, and `q13`, and caused a `+153.7%` unverified-`HypoPG` latency regression on `q03` (`2,920.1 ms → 7,407.3 ms`, caught when paired with our Phase-2 `tpch_eval` regression guard) — whereas `v2_hybrid` improved `7/8` queries down to `43.11s` (`10.46×`) with `0%` regressions.
 
 ---
 
-## 7. Phase 2 (`v2`) Methodology — Fixed-`K` Pareto & Anti-Contamination (`measurement_contract_v2.yaml`)
+## 7. Phase 2 (`v2`) Methodology — Fixed-`K` Pareto & Anti-Contamination (`contracts/measurement_contract_v2.yaml`)
 
 - **Fast Async Engine (`scripts/v2/run_v2.py`):** 4-way `AsyncOpenAI` concurrency across queries with a strict `asyncio.Lock` around every PostgreSQL `EXPLAIN ANALYZE` / Phase-2 real index build (verified zero DB contention in `tests/speeduptest/bench_e2e.py`, 3.2× faster wall-clock time), `get_table_stats` pre-fetched once at Round 0 (-20% tokens), unbounded thinking (apples-to-apples with `v1`), and per-query exact-action deduplication cache to force genuine exploration across `K = 20` fixed rounds.
 - **3-Way Model Comparison on Slowest `v1` Queries (`K = 20` fixed, no early stopping):**
@@ -155,3 +157,7 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 - `986db31` — NVIDIA NIM (OpenAI-compatible) provider routing with retry/backoff.
 - `e1280b9` — Tool-budget enforcement, warm-cache fairness, read-only `EXPLAIN` fix, API timeout resilience, `check_setup.py`, `summarize_runs.py`.
 - `fe61594` — Frozen pre-experiment measurement contract `v1.0.0` before official baseline runs.
+- `60a04a4`–`6881807` — Completed all 10 Phase-1 (`v1`) baseline and MCP advisory runs across JOB (113q) and TPC-H SF=10 (22q).
+- `1eb9ba2`–`ace1175` — Frozen `contracts/measurement_contract_v2.yaml` (`v2.0.0`), implemented Mode C 4-way async engine (`run_v2.py`), `imdb_anon` zero-leakage cloner, `STATS-CEB` loader, and completed all 12 `v2` runs (`JOB Top-12` `K=20`, `TPC-H Top-8` `K*=6`, `imdb_anon Top-12` `K*=6`, `STATS-CEB Top-12` `K*=6`).
+- `b9b50e5`–`62c0133` — Added `v1`/`v2` experiment reports, Pareto & anti-contamination figures, and advisor summary PDF.
+- Post-`v2` hardening — Added `Leading(((a b) c))` binary-tree normalizer & conflict-hint deduplication, `pglast` AST validation for expression/partial indexes, dynamic exploration timeout capping, non-LLM `dta_tpch_top8_v2` baseline, live `EXPLAIN ANALYZE` case studies (`thesis/case_studies.md`), and GitHub Actions reproducibility gate (`.github/workflows/research-ci.yml`).

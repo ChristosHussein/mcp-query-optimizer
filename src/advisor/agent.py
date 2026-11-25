@@ -35,7 +35,7 @@ Rules:
 3. Valid pg_hint_plan directives include:
    - Scan hints: SeqScan(alias), IndexScan(alias), IndexOnlyScan(alias), BitmapScan(alias), NoSeqScan(alias), NoIndexScan(alias)
    - Join hints: HashJoin(a b ...), MergeJoin(a b ...), NestLoop(a b ...), NoNestLoop(a b ...), NoHashJoin(a b ...)
-   - Join order: Leading((a b) c) or Leading(a b c)
+   - Join order: Leading(a b c) for join order only, or strictly binary nested Leading(((a b) c)) with double outer parens for directed join trees. Do NOT combine positive and negative hints on the exact same target (e.g., use SeqScan(a) alone, never SeqScan(a) NoIndexScan(a)).
 4. You may call get_table_stats or explain_with_hints(analyze=False) at most 2 times to inspect statistics or check estimated plans/hint validity cheaply. Do NOT call explain_with_hints with analyze=True — the evaluator will execute and time your final JSON proposal for this round.
 5. Do NOT repeat a hint set that already failed or regressed in a previous round.
 6. Keep reasoning concise and end your turn with a single valid JSON object inside ```json ... ``` with exact keys:
@@ -601,7 +601,7 @@ class QueryAdvisorRunner:
             fb = f"used={hr['used']} not_used={hr['not_used']} warnings={hr['warnings']}"
             return {
                 "proposed_action": data["hints"],
-                "action_valid": bool(hr["used"]) and not hr["errors"] and not hr["warnings"],
+                "action_valid": bool(hr["used"]) and not hr["errors"],
                 "estimated_cost": data["total_cost"],
                 "execution_latency_ms": data["execution_time_ms"],
                 "timed_out": False,

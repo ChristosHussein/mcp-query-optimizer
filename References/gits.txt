@@ -1,2 +1,0 @@
-https://github.com/HypoPG/hypopg
-https://github.com/ossc-db/pg_hint_plan

@@ -81,7 +81,7 @@ def main() -> None:
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_id = args.run_id or f"{args.method}_{args.benchmark}_{ts}"
-    out_jsonl = ROOT / "results" / "runs" / run_id / "queries.jsonl"
+    out_jsonl = ROOT / "results" / "v1" / run_id / "queries.jsonl"
 
     cfg = AdvisorConfig(
         benchmark=args.benchmark,
