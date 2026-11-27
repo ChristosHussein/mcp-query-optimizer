@@ -10,13 +10,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Local-only files (defense guides, integrity maps, PDF references, timeline, reports, advisor exports — never uploaded to GitHub)
-docs/
-thesis/
-for advisor/
-References/
-*Timeline*.pdf
-
 # Large benchmark datasets & database files (download/generate via scripts)
 data/
 pgdata/
