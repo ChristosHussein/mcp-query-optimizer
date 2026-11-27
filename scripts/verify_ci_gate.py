@@ -498,13 +498,20 @@ def main() -> None:
     errors: list[str] = []
     if not args.skip_sha:
         errors.extend(verify_frozen_hashes())
-    errors.extend(verify_artifact_discovery(args.thesis_dir))
     errors.extend(verify_thesis_log(REPO / "THESIS_LOG.md"))
-    errors.extend(verify_v1_report(REPO / "thesis" / "v1_experiment_report.md"))
-    errors.extend(verify_v2_report(args.v2_report))
-    errors.extend(verify_v3_report(REPO / "thesis" / "v3_experiment_report.md"))
-    errors.extend(verify_progress_report(args.progress_report))
-    errors.extend(verify_pdf(REPO / "for advisor" / "v2" / "v2_results_tables.pdf"))
+    if args.thesis_dir.exists():
+        errors.extend(verify_artifact_discovery(args.thesis_dir))
+        errors.extend(verify_v1_report(args.thesis_dir / "v1_experiment_report.md"))
+        errors.extend(verify_v2_report(args.v2_report))
+        errors.extend(verify_v3_report(args.thesis_dir / "v3_experiment_report.md"))
+        errors.extend(verify_progress_report(args.progress_report))
+    else:
+        print(f"[thesis] Local-only directory '{args.thesis_dir.name}/' not present in CI checkout — verified frozen hashes + THESIS_LOG.md.")
+    adv_pdf = REPO / "for advisor" / "v2" / "v2_results_tables.pdf"
+    if adv_pdf.exists():
+        errors.extend(verify_pdf(adv_pdf))
+    else:
+        print("[advisor_pdf] Local-only 'for advisor/' not present in CI checkout — skipped.")
 
     if args.record:
         args.record.parent.mkdir(parents=True, exist_ok=True)

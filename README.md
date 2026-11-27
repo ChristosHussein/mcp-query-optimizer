@@ -15,8 +15,7 @@ MSc Thesis repository implementing an MCP-based agentic query optimization advis
 - `scripts/v1/` — Phase-1 runners (`run_pg_default.py`, `run_bao_oracle.py`, `run_llmsteer.py`, `run_advisor.py`, `summarize_runs.py`).
 - `scripts/v2/` — Phase-2 async fixed-`K` engine (`run_v2.py` with DB serialization lock, dynamic exploration timeout cap, and Alternating `120B ↔ 550B` Hybrid), anti-contamination builders (`setup_imdb_anon.py`, `load_stats_ceb.py`), and non-LLM heuristic DTA runner (`run_dta_tpch.py`).
 - `scripts/v3/` — Phase-3 spec-aligned runner (`run_v3.py` powered by NVIDIA NIM `nemotron-3.5-lightning-30b-a3b`, compact query-filtered Round-1 `get_table_stats`, `--all-queries` full JOB 113 / TPC-H 22 execution, fail-fast quota breaker, and `results/v3/` output).
-- `thesis/` — Experiment reports (`v1_experiment_report.md`, `v2_experiment_report.md`, `case_studies.md`, `thesis_progress_and_retrospective_report.md`) and Pareto/anti-contamination/case-study figures.
-- `results/` — Immutable raw `queries.jsonl` logs organized by campaign (`results/baselines/`, `results/v1/`, `results/v2/`).
+- `results/` — Immutable raw `queries.jsonl` logs organized by campaign (`results/baselines/`, `results/v1/`, `results/v2/`, `results/v3/`).
 - `contracts/` — Pre-experiment scientific integrity contracts (`measurement_contract_v1.yaml`, `measurement_contract_v2.yaml`).
 - `tests/test_mcp_advisory.py` — Unit (`--unit-only`) + live PostgreSQL 16 + MCP stdio integration checks.
 

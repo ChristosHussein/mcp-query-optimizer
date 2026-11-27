@@ -10,8 +10,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Local-only files (defense guides, integrity maps, PDF references, timeline — never uploaded to GitHub)
+# Local-only files (defense guides, integrity maps, PDF references, timeline, reports, advisor exports — never uploaded to GitHub)
 docs/
+thesis/
+for advisor/
 References/
 *Timeline*.pdf
 
@@ -22,7 +24,6 @@ results/cache/
 results/runs/
 *.tbl
 *.csv
-!for advisor/**/*.csv
 *.dump
 *.tar.gz
 *.tgz
