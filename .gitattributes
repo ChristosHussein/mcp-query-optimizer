@@ -1,0 +1,2 @@
+*.jsonl text eol=lf
+contracts/*.yaml text eol=lf
