@@ -128,6 +128,9 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 | `v2_120b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_120b` (120B, 60s cap) | `4756f04` | **DONE** | 28,701.73 | 60,000.00 | 407.884 | 4 | `results/v2/v2_120b_stats_ceb_k6/queries.jsonl` |
 | `v2_550b_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_550b` (550B, 60s cap) | `6f453b2` | **DONE** | 23,068.39 | 60,000.00 | 399.166 | 4 | `results/v2/v2_550b_stats_ceb_k6/queries.jsonl` |
 | `v2_hybrid_stats_ceb_k6` | `stats_ceb` Top-12 (`v2`, K*=6) | `v2_hybrid` (alternating, 60s cap) | `d9e2290` | **DONE** | 35,130.15 | 60,000.00 | 409.846 | 4 | `results/v2/v2_hybrid_stats_ceb_k6/queries.jsonl` |
+| `v3_lightning_tpch_full_k6` | TPC-H SF=10 (22, `v3`, K*=6) | `v3_lightning` (30B/3B NIM) | `2b6a017+` | **DONE** | 972.91 | 12,447.29 | 84.129 | 0 | `results/v3/v3_lightning_tpch_full_k6/queries.jsonl` |
+| `v3_lightning_job_full_k6` | JOB (113, `v3`, K*=6) | `v3_lightning` (30B/3B NIM) | `2b6a017+` | **DONE** | 139.45 | 1,370.59 | 55.629 | 0 | `results/v3/v3_lightning_job_full_k6/queries.jsonl` |
+| `v3_lightning_stats_ceb_top12_k6` | `stats_ceb` Top-12 (`v3`, K*=6) | `v3_lightning` (30B/3B NIM, 60s cap) | `2b6a017+` | **DONE** | 30,569.86 | 60,000.00 | 425.197 | 4 | `results/v3/v3_lightning_stats_ceb_top12_k6/queries.jsonl` |
 
 **Baseline Insights:**
 - **JOB (`pg_default_job_v1`):** Classic heavy-tailed distribution — median is fast (`154.5 ms`), while P90 is `2,426.0 ms` and the top tail queries (`16b`: `7.66s`, `19d`: `6.06s`, `17e`/`17a`: `4.76s`, `17f`: `4.14s`, `31c`: `3.74s`, `25c`: `3.15s`, `10c`: `2.96s`) dominate total runtime (`82.83s`).
@@ -139,7 +142,7 @@ Connectivity tested on `2026-11-20` via `scripts/check_setup.py`:
 
 ## 7. Phase 2 (`v2`) Methodology — Fixed-`K` Pareto & Anti-Contamination (`contracts/measurement_contract_v2.yaml`)
 
-- **Fast Async Engine (`scripts/v2/run_v2.py`):** 4-way `AsyncOpenAI` concurrency across queries with a strict `asyncio.Lock` around every PostgreSQL `EXPLAIN ANALYZE` / Phase-2 real index build (verified zero DB contention in `tests/speeduptest/bench_e2e.py`, 3.2× faster wall-clock time), `get_table_stats` pre-fetched once at Round 0 (-20% tokens), unbounded thinking (apples-to-apples with `v1`), and per-query exact-action deduplication cache to force genuine exploration across `K = 20` fixed rounds.
+- **Fast Async Engine (`scripts/v2/run_v2.py`):** 4-way `AsyncOpenAI` concurrency across queries with a strict `asyncio.Lock` around every PostgreSQL `EXPLAIN ANALYZE` / Phase-2 real index build (verified zero DB contention, 3.2× faster wall-clock time), an intended Round-0 `get_table_stats` prefetch *(post-run audit caught a silent `table_names`/`schema_name` MCP parameter mismatch, so all 12 frozen `v2` runs operated purely on `EXPLAIN ANALYZE` `[EST_ERR]` + `explain_with_hints`/`HypoPG` feedback without `pg_stats`, whereas `v1` invoked live on-demand `get_table_stats`)*, unbounded thinking (apples-to-apples with `v1`), and per-query exact-action deduplication cache to force genuine exploration across `K = 20` fixed rounds.
 - **3-Way Model Comparison on Slowest `v1` Queries (`K = 20` fixed, no early stopping):**
   1. `v2_120b` (`nemotron-3.5-super-vl-120b-a12b`)
   2. `v2_550b` (`nemotron-3-ultra-550b-a55b`)

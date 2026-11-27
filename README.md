@@ -13,7 +13,8 @@ MSc Thesis repository implementing an MCP-based agentic query optimization advis
   - Catalog-filtered `DatabaseTuningAdvisor` (`dta_calc.py`) non-LLM greedy `HypoPG` baseline
 - `src/advisor/` — Phase-1 (`v1`) sequential MCP advisory loop (`mcp_single_shot`, `mcp_iter_cheap`, `mcp_iter_hybrid`, `mcp_iter_frontier`) supporting NVIDIA NIM (`nemotron-3.5-super-vl-120b-a12b` Worker + `nemotron-3-ultra-550b-a55b` Frontier) and Google Gemini APIs.
 - `scripts/v1/` — Phase-1 runners (`run_pg_default.py`, `run_bao_oracle.py`, `run_llmsteer.py`, `run_advisor.py`, `summarize_runs.py`).
-- `scripts/v2/` — Phase-2 fast 4-way async fixed-`K` engine (`run_v2.py` with DB serialization lock, Round-0 stats prefetch, dynamic exploration timeout cap, and Alternating `120B ↔ 550B` Hybrid), anti-contamination builders (`setup_imdb_anon.py`, `load_stats_ceb.py`), and non-LLM heuristic DTA runner (`run_dta_tpch.py`).
+- `scripts/v2/` — Phase-2 async fixed-`K` engine (`run_v2.py` with DB serialization lock, dynamic exploration timeout cap, and Alternating `120B ↔ 550B` Hybrid), anti-contamination builders (`setup_imdb_anon.py`, `load_stats_ceb.py`), and non-LLM heuristic DTA runner (`run_dta_tpch.py`).
+- `scripts/v3/` — Phase-3 spec-aligned runner (`run_v3.py` powered by NVIDIA NIM `nemotron-3.5-lightning-30b-a3b`, compact query-filtered Round-1 `get_table_stats`, `--all-queries` full JOB 113 / TPC-H 22 execution, fail-fast quota breaker, and `results/v3/` output).
 - `thesis/` — Experiment reports (`v1_experiment_report.md`, `v2_experiment_report.md`, `case_studies.md`, `thesis_progress_and_retrospective_report.md`) and Pareto/anti-contamination/case-study figures.
 - `results/` — Immutable raw `queries.jsonl` logs organized by campaign (`results/baselines/`, `results/v1/`, `results/v2/`).
 - `contracts/` — Pre-experiment scientific integrity contracts (`measurement_contract_v1.yaml`, `measurement_contract_v2.yaml`).

@@ -1,0 +1,86 @@
+# Pre-Experiment Measurement Contract — Phase 3 (v3.0.0)
+# Definitive Thesis-Spec Full-Workload Evaluation (JOB 113q, TPC-H SF=10 22q, STATS-CEB Top-12)
+# Powered by NVIDIA Nemotron-3.5-Lightning-30B-A3B + Hardened MCP Server (Working Compact pg_stats, Leading Normalizer, pglast AST Indexes).
+
+contract_version: "3.0.0"
+declared_date: "2026-11-26"
+status: "FROZEN_PRE_RUN"
+thesis_title: "MCP-Driven Query Optimization Advisory for Relational Databases"
+
+thesis_scope_alignment:
+  specification: "NTUA ECE Diploma/MSc Thesis Topic 3 (Supervisor: D. Tsoumakos; Committee: G. Goumas, N. Koziris)"
+  mandated_capabilities:
+    - "Extended postgres-mcp exposing EXPLAIN/EXPLAIN ANALYZE (with parametric placeholder substitution), catalog statistics (pg_stats: n_distinct, correlation, MCVs, histograms), pg_hint_plan hints, and HypoPG hypothetical indexes"
+    - "Iterative agentic advisory loop over two semantics-preserving action spaces: (a) pg_hint_plan join order/method/scan hints, (b) 2-phase HypoPG cost filter -> real materialization on isolated *_eval clone"
+    - "Full-workload evaluation on JOB (113 queries, including fast queries) and TPC-H SF=10 (22 queries), plus out-of-distribution generalization on STATS-CEB Top-12 (imdb_anon omitted since v2 already proved zero-leakage generalization)"
+  mandated_comparisons:
+    - "pg_default (frozen v1 baseline)"
+    - "Single-shot MCP advisory (K=1 paired slice of v3 runs — zero baseline drift)"
+    - "Iterative MCP advisory (K*=6 fixed budget derived from v2 K=1..20 Pareto frontier)"
+    - "LLMSteer SQL-embedding classifier (frozen v1 10-fold CV baseline on JOB 113q)"
+    - "Bao Oracle 49-arm upper bound (frozen v1 baseline on JOB 113q)"
+    - "Non-LLM Greedy DatabaseTuningAdvisor (frozen v2 DTA baseline on TPC-H)"
+  mandated_metrics:
+    - "P50 latency (ms), P90 latency (ms), Total workload latency (s)"
+    - "LLM API calls per query & total token cost (prompt + completion + reasoning)"
+    - "Percentage of queries improved (>5% latency reduction) & regression rate (0.0% target via empirical verification guard)"
+    - "Round-by-round K=1..6 convergence curve (latency reduction vs. tokens)"
+
+hardened_mcp_upgrades_over_v1_v2:
+  - "Round-1 on-demand query-column-filtered get_table_stats (restores live pg_stats absent in v2 while pruning unreferenced columns ~4x to ~3 KB and caching per query to eliminate v1 redundant round-trips and static JSON prompt bloat)"
+  - "Lowercase table-name normalization in get_table_stats (fixes mixed-case STATS-CEB queries like postLinks/postHistory)"
+  - "Automatic S-expression binarizer in normalize_hint_block() (rewrites Leading((a b) c) -> Leading(((a b) c)) and strips conflicting positive/negative scan & join hints)"
+  - "Relaxed partial-hint eligibility: action_valid = bool(hr['used']) and not hr['errors'] (prevents discarding verified speedups over auxiliary syntax warnings)"
+  - "pglast AST-validated functional/expression and partial WHERE indexes across both HypoPG and evaluate_real_indexes (unlocks TPC-H q22 substring(c_phone FROM 1 FOR 2) while blocking subqueries & SQL injection)"
+  - "Dynamic exploration timeout cap for hint runs: min(timeout_s, max(15, ceil(2.5 * best_ms / 1000)))"
+  - "Fail-fast daily-quota breaker & 1-shot JSON format recovery guard"
+
+execution_engine:
+  script: "scripts/v3/run_v3.py"
+  provider: "nvidia"
+  api_endpoint: "https://integrate.api.nvidia.com/v1"
+  model: "nvidia/nemotron-3.5-lightning-30b-a3b"
+  temperature: 0.2
+  concurrency_llm: 3
+  db_timing_serialization: "strict asyncio.Lock around every PostgreSQL EXPLAIN ANALYZE / Phase-2 real index build (zero DB contention)"
+  warmup_protocol: "1 warm-up + 1 timed EXPLAIN ANALYZE per candidate (same warm-cache fairness as v2)"
+  fixed_rounds_K: 6
+  early_stopping: "DISABLED (strict fixed K*=6 derived from v2 Pareto knee; every query including <50 ms JOB queries runs all 6 rounds; duplicate actions served from per-query cache)"
+  skip_fast_ms: 0.0
+  max_tool_calls_per_round: 2
+
+methods:
+  - id: "v3_lightning"
+    model_worker: "nvidia:nvidia/nemotron-3.5-lightning-30b-a3b"
+    model_advisor: null
+    description: "Fixed K*=6 iterative MCP advisor powered by Nemotron-3.5-Lightning-30B-A3B (NVIDIA NIM) with hardened MCP server (Round 1 = exact paired single-shot; Rounds 1..6 = iterative)"
+
+planned_runs:
+  - run_id: "v3_lightning_tpch_full_k6"
+    benchmark: "tpch"
+    database: "tpch"
+    eval_clone_database: "tpch_eval"
+    queries: "ALL 22 official TPC-H SF=10 queries (q01..q22)"
+    num_queries: 22
+    fixed_rounds_K: 6
+    timeout_s: 180
+    action_space: "2-phase HypoPG (>=5% cost drop) -> tpch_eval real B-tree/expression/partial indexes"
+    output_path: "results/v3/v3_lightning_tpch_full_k6/queries.jsonl"
+  - run_id: "v3_lightning_job_full_k6"
+    benchmark: "job"
+    database: "imdb"
+    queries: "ALL 113 official JOB queries (1a..33c, including fast queries)"
+    num_queries: 113
+    fixed_rounds_K: 6
+    timeout_s: 180
+    action_space: "pg_hint_plan hints"
+    output_path: "results/v3/v3_lightning_job_full_k6/queries.jsonl"
+  - run_id: "v3_lightning_stats_ceb_top12_k6"
+    benchmark: "stats_ceb"
+    database: "stats_ceb"
+    queries: ["s126", "s122", "s120", "s058", "s135", "s068", "s108", "s030", "s107", "s034", "s143", "s070"]
+    num_queries: 12
+    fixed_rounds_K: 6
+    timeout_s: 60
+    action_space: "pg_hint_plan hints"
+    output_path: "results/v3/v3_lightning_stats_ceb_top12_k6/queries.jsonl"

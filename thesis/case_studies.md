@@ -297,7 +297,7 @@ Execution Time: 11053.460 ms
 ## Case Study 5: `imdb_anon 17c` — Blind Optimization With Zero IMDb Identifiers (`18.13×`)
 - **Logged Latencies:** Baseline `2660.5 ms` → **`v2_hybrid` `146.8 ms` (`18.13×`)**
 - **Winning Blind `pg_hint_plan` Block:** `/*+ Leading(a06 a01 a05 a03 a04 a07 a02) HashJoin(a06 a01 a05 a03 a04 a07 a02) SeqScan(a06) SeqScan(a03) */`
-- **Agent Diagnosis (Purely From `t01..t21` `pg_stats` & `[EST_ERR]`):** Start with the two highly selective filters (a06.c02 LIKE 'X%' ~174 rows, a03.c02='character-name-in-title' 1 row), force hash joins for all subsequent large intermediate joins to avoid catastrophic nested-loop underestimation, and use sequential scans on filtered tables.
+- **Agent Diagnosis (Purely From Anonymized `t01..t21` `EXPLAIN ANALYZE` & `[EST_ERR]` — Zero Schema Names, Zero `pg_stats`):** Start with the two highly selective filters (a06.c02 LIKE 'X%' ~174 rows, a03.c02='character-name-in-title' 1 row), force hash joins for all subsequent large intermediate joins to avoid catastrophic nested-loop underestimation, and use sequential scans on filtered tables.
 
 ### Anonymized SQL Query (`benchmarks/imdb_anon/queries/17c.sql`)
 ```sql

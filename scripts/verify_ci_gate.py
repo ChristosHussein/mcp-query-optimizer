@@ -38,6 +38,7 @@ def resolve_run_jsonl(run_id: str) -> Path:
 FROZEN_HASHES: dict[str, tuple[str, int | None]] = {
     "contracts/measurement_contract_v1.yaml": ("D59EE68292BFCE02E7F6C292EFAC8F9A77AEC0B3609EFFDF1A82E697D8615FD7", None),
     "contracts/measurement_contract_v2.yaml": ("5299C3188553F5231155DD4B76BC83D80FD0E1EA6912B6DA8A32750DAB2C3F75", None),
+    "contracts/measurement_contract_v3.yaml": ("CC4383171C4B05D1746F88B8CEE101E57D17677A802DC1EA35F5418DEC7272F6", None),
     "results/baselines/pg_default_job_v1/queries.jsonl": ("38F0959E5AB6D7F70EE7D13B638C8C6EEE76D2BE770656A1986E8413F1AAA9B1", 113),
     "results/baselines/pg_default_tpch_v1/queries.jsonl": ("CF30B7AE88E7D25C345B60F46FC429383065FB3A45B85C6B52413F3749B00D2D", 22),
     "results/baselines/bao_oracle_all48_job_v1/queries.jsonl": ("16C73027FAD1814505A7EED365E9C5B6BF56990C7F29EBFDA3F4E328CA5EAE21", 113),
@@ -62,11 +63,15 @@ FROZEN_HASHES: dict[str, tuple[str, int | None]] = {
     "results/v2/v2_120b_stats_ceb_k6/queries.jsonl": ("88E224CC74045989D0DB6CAA81D9A57D05B97C1EB4364A8181AA7546018DC4B2", 84),
     "results/v2/v2_550b_stats_ceb_k6/queries.jsonl": ("D3D1F1B1F2EC31BE6BA2C4CA446CCAB7762A4BE6DBEC1567350CF9FBE60BCB8C", 84),
     "results/v2/v2_hybrid_stats_ceb_k6/queries.jsonl": ("3CDA824AE79882312F7517C9C585CE5705257FF6D623F7AC355175BB48A71985", 84),
+    "results/v3/v3_lightning_tpch_full_k6/queries.jsonl": ("F6C8916006A3A32B6DAE279D4B8C339207FBAFCEE54241DD07839194EE2DEB4E", 154),
+    "results/v3/v3_lightning_job_full_k6/queries.jsonl": ("AE246F4D8916864A7BC01F8B07F3C818CC4721E26C2F11DECD82F9A8B9AB8DDA", 791),
+    "results/v3/v3_lightning_stats_ceb_top12_k6/queries.jsonl": ("60C417846477D31EDFA06D500FBB8FF5060EC79A2E956404A784B1035736B15A", 84),
 }
 
 REGISTERED_THESIS_MDS = {
     "v1_experiment_report.md",
     "v2_experiment_report.md",
+    "v3_experiment_report.md",
     "thesis_progress_and_retrospective_report.md",
     "case_studies.md",
 }
@@ -107,7 +112,7 @@ def verify_frozen_hashes() -> list[str]:
             if n != exp_cnt:
                 errors.append(f"RECORD COUNT MISMATCH [{rel}]: expected={exp_cnt} got={n}")
     # Also ensure no unregistered run directories exist outside FROZEN_HASHES
-    for tier in ("baselines", "v1", "v2"):
+    for tier in ("baselines", "v1", "v2", "v3"):
       for run_jsonl in sorted((RESULTS / tier).glob("*/queries.jsonl")):
         rel = run_jsonl.relative_to(REPO).as_posix()
         if rel not in FROZEN_HASHES:
@@ -233,14 +238,14 @@ def check_close(label: str, expected: float, actual: float, tol: float, errors: 
 def verify_thesis_log(path: Path) -> list[str]:
     errors: list[str] = []
     rows = parse_md_table_rows(path.read_text(encoding="utf-8"))
-    ledger = {r[0]: r for r in rows if len(r) >= 10 and (r[0].startswith("pg_") or r[0].startswith("bao_") or r[0].startswith("llmsteer") or r[0].startswith("mcp_") or r[0].startswith("v2_") or r[0].startswith("dta_"))}
+    ledger = {r[0]: r for r in rows if len(r) >= 10 and (r[0].startswith("pg_") or r[0].startswith("bao_") or r[0].startswith("llmsteer") or r[0].startswith("mcp_") or r[0].startswith("v2_") or r[0].startswith("v3_") or r[0].startswith("dta_"))}
     checked = 0
-    for rid in sorted(p.parent.name for tier in ("baselines", "v1", "v2") for p in (RESULTS / tier).glob("*/queries.jsonl")):
+    for rid in sorted(p.parent.name for tier in ("baselines", "v1", "v2", "v3") for p in (RESULTS / tier).glob("*/queries.jsonl")):
         if rid not in ledger:
             errors.append(f"MISSING THESIS_LOG ROW: {rid}")
             continue
         r = ledger[rid]
-        if rid.startswith("v2_") or rid.startswith("dta_"):
+        if rid.startswith("v2_") or rid.startswith("v3_") or rid.startswith("dta_"):
             k = 20 if "job_top12" in rid else (1 if rid.startswith("dta_") else 6)
             to_ms = 60000.0 if "stats_ceb" in rid else 180000.0
             m = compute_v2(rid, k, to_ms)
@@ -348,6 +353,62 @@ def verify_v2_report(path: Path) -> list[str]:
     return errors
 
 
+def verify_v3_report(path: Path) -> list[str]:
+    errors: list[str] = []
+    rows = parse_md_table_rows(path.read_text(encoding="utf-8"))
+    # Verify Section 3.1 (JOB K=0..6) and 3.2 (TPC-H K=0..6) tables + STATS-CEB summary rows
+    job_k = {}
+    tpch_k = {}
+    stats_k = {}
+    for r in rows:
+        if r and re.match(r"^K\*?=[0-6]$", r[0]):
+            k = int(r[0].split("=")[1])
+            if len(r) == 11 and r[1] == "79.76":
+                job_k[k] = r
+            elif len(r) == 12 and r[1] == "557.46":
+                tpch_k[k] = r
+        elif r and len(r) >= 13 and r[0].startswith("v3_lightning") and r[2] in ("K=1", "K*=6") and r[3] == "429.94":
+            stats_k[int(r[2].split("=")[1])] = r
+
+    checked = 0
+    for k in range(7):
+        if k not in job_k:
+            errors.append(f"MISSING v3 JOB K={k} row")
+        else:
+            r = job_k[k]
+            m = compute_v2("v3_lightning_job_full_k6", k, 180000.0)
+            check_close(f"v3_job:K={k}:best_s", m["best_s"], clean_num(r[2]), 0.02, errors)
+            check_close(f"v3_job:K={k}:p50", m["p50"], clean_num(r[5]), 0.05, errors)
+            check_close(f"v3_job:K={k}:p90", m["p90"], clean_num(r[6]), 0.05, errors)
+            check_close(f"v3_job:K={k}:tok", m["mean_tokens"], clean_num(r[9]), 2.0, errors)
+            checked += 4
+        if k not in tpch_k:
+            errors.append(f"MISSING v3 TPC-H K={k} row")
+        else:
+            r = tpch_k[k]
+            m = compute_v2("v3_lightning_tpch_full_k6", k, 180000.0)
+            check_close(f"v3_tpch:K={k}:best_s", m["best_s"], clean_num(r[2]), 0.02, errors)
+            check_close(f"v3_tpch:K={k}:p50", m["p50"], clean_num(r[5]), 0.05, errors)
+            check_close(f"v3_tpch:K={k}:p90", m["p90"], clean_num(r[6]), 0.05, errors)
+            check_close(f"v3_tpch:K={k}:tok", m["mean_tokens"], clean_num(r[10]), 2.0, errors)
+            checked += 4
+
+    for k in (1, 6):
+        if k not in stats_k:
+            errors.append(f"MISSING v3 STATS-CEB K={k} row")
+        else:
+            r = stats_k[k]
+            m = compute_v2("v3_lightning_stats_ceb_top12_k6", k, 60000.0)
+            check_close(f"v3_stats:K={k}:best_s", m["best_s"], clean_num(r[4]), 0.02, errors)
+            check_close(f"v3_stats:K={k}:p50", m["p50"], clean_num(r[7]), 0.05, errors)
+            check_close(f"v3_stats:K={k}:p90", m["p90"], clean_num(r[8]), 0.05, errors)
+            check_close(f"v3_stats:K={k}:tok", m["mean_tokens"], clean_num(r[12]), 2.0, errors)
+            checked += 4
+
+    print(f"[v3_report] Verified {checked} bound cells in {path.name}; errors={len(errors)}")
+    return errors
+
+
 def verify_progress_report(path: Path) -> list[str]:
     errors: list[str] = []
     rows = parse_md_table_rows(path.read_text(encoding="utf-8"))
@@ -441,6 +502,7 @@ def main() -> None:
     errors.extend(verify_thesis_log(REPO / "THESIS_LOG.md"))
     errors.extend(verify_v1_report(REPO / "thesis" / "v1_experiment_report.md"))
     errors.extend(verify_v2_report(args.v2_report))
+    errors.extend(verify_v3_report(REPO / "thesis" / "v3_experiment_report.md"))
     errors.extend(verify_progress_report(args.progress_report))
     errors.extend(verify_pdf(REPO / "for advisor" / "v2" / "v2_results_tables.pdf"))
 
@@ -469,7 +531,7 @@ def main() -> None:
         for e in errors:
             print("  -", e)
         sys.exit(1)
-    print("\nINTEGRITY CHECK PASSED: 0 discrepancies across all 23 frozen runs, THESIS_LOG.md, v1/v2/progress reports, and advisor PDF.")
+    print("\nINTEGRITY CHECK PASSED: 0 discrepancies across all 26 frozen runs, THESIS_LOG.md, v1/v2/v3/progress reports, and advisor PDF.")
 
 
 if __name__ == "__main__":
