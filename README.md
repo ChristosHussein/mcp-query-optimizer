@@ -1,4 +1,4 @@
-# MCP-Driven Query Optimization Advisory for Relational Databases
+# MCP-Driven Query Optimization Advisory for Relational Databases.
 
 MSc Thesis repository implementing an MCP-based agentic query optimization advisor over PostgreSQL 16 (`pg_hint_plan` + `HypoPG`), evaluated across **JOB (IMDb, 113 queries)**, **TPC-H (SF=10, 22 queries)**, **Schema-Anonymized IMDb (`imdb_anon`, Top-12)**, and **STATS-CEB (VLDB 2022, Top-12)**.
 
